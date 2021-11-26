@@ -33,7 +33,7 @@
 
 using namespace std;
 
-int create_multi_level_bfs(vector<bloom_filter> bfs){
+int create_multi_level_bfs(vector<bloom_filter> bfs, vector<string> keys){
 
 	// std::vector<bloom_filter> bfs;
 	ifstream nameFileout;
@@ -42,6 +42,7 @@ int create_multi_level_bfs(vector<bloom_filter> bfs){
 	string line;
 
 	while(std::getline(nameFileout, line)){
+		keys.push_back(line);
 		// insert each prefix into each bloom filter
 		for (int i = 0; i < line.length(); i++){
 			if (bfs.size() <= i){
@@ -114,7 +115,7 @@ int query(vector<bloom_filter> bfs, string left_key, string right_key){
 }
 
 
-int query_bloom_filters(vector<bloom_filter> bfs){
+int query_bloom_filters(vector<string> keys, vector<bloom_filter> bfs){
 
 	ifstream nameFileout;
 	// change this to read from workload dataset
@@ -122,30 +123,66 @@ int query_bloom_filters(vector<bloom_filter> bfs){
 	string line;
 	std::vector<std::string> left_keys;
 	std::vector<std::string> right_keys;
+	string left_key = 0;
+	string right_key = 0;
+
+	int fp = 0;
+	int tn = 0;
+	double fpr = 0;
+
 
 	while(std::getline(nameFileout, line)){
-		// insert each prefix into each bloom filter
-		for (int i = 0; i < line.length(); i++){
-			string left_key = line;
-			string right_key = left_key + left_key[left_key.length() - 1];	
-			left_keys.push_back(left_key);
-			right_keys.push_back(right_key);
+		left_key = line;
+		right_key = left_key + left_key[left_key.length() - 1];	
+		left_keys.push_back(left_key);
+		right_keys.push_back(right_key);
 
-			int bf_query_result = query(bfs, left_key, right_key);
+		int bf_query_result = query(bfs, left_key, right_key);
+		int binary_search_result = query_binary_search(keys, left_key, right_key);
 
+		if (bf_query_result == 1 && binary_search_result == 0){
+			fp += 1;
+		} else if (bf_query_result == 0 && binary_search_result == 0){
+			tn += 1;
 		}
 
 	}
 
-
-	return 0;
-}
-
-int main(){
-	vector<bloom_filter> bfs;
-	int return_code = create_multi_level_bfs(bfs);
-	query_bloom_filters(bfs);
+	fpr = fp / (fp + tn);
 	return 0;
 }
 
 // TODO: implement binary search to determine true positives
+
+int query_binary_search(vector<string> keys, string left_key, string right_key){
+
+	int i = 0;
+	while (left_key[i] == right_key[i]){
+		// if dataset does not contain a common prefix, retuurn false
+		if(!binary_search(keys.begin(), keys.end(), left_key.substr(0, i + 1))){
+			return 0;
+		}
+		i += 1;
+
+	}
+
+	// gotten past common substring;
+	// query left_key[i] .... right_key[i] on BF
+	// edge case: BF for a certain index doesn't exist
+	// bounds checking: make sure right_key[i] is within the a-z || A-Z bounds
+	for (char ch = left_key[i]; ch < right_key[i] + 1; ch++){
+		if (binary_search(keys.begin(), keys.end(),left_key.substr(0, i) + ch)){
+			return 1;
+		}
+	return 0;
+	}
+}
+
+int main(){
+	vector<bloom_filter> bfs;
+	vector<string> keys;
+	int return_code = create_multi_level_bfs(bfs, keys);
+	query_bloom_filters(keys, bfs);
+	return 0;
+}
+
