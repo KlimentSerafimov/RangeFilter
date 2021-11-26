@@ -10,8 +10,8 @@ int emails(){
 
     ofstream datasetfile;
     ofstream workloadfile;
-	datasetfile.open("data/emails_dataset.txt");
-    workloadfile.open("data/emails_workload.txt");
+	datasetfile.open("data.nosync/emails_dataset.txt");
+    workloadfile.open("data.nosync/emails_workload.txt");
 
 	nameFileout.open("../datasets.nosync/emails-validated-random-only-30-characters.txt.sorted");
 	// nameFileout.open("url_data_set.txt");
@@ -19,7 +19,9 @@ int emails(){
 
 	while(std::getline(nameFileout, line)){
         // cout<<line<<endl;
-        double r = rand()/RAND_MAX;
+        double r = (rand() * 1.0) /RAND_MAX;
+        // cout<<"r: "<<r<<endl;
+
 		if (r > 0.5){
             datasetfile<<line<<endl;
 		} else {
@@ -39,8 +41,8 @@ int urls(){
 
     ofstream datasetfile;
     ofstream workloadfile;
-	datasetfile.open("data/url_dataset.txt");
-    workloadfile.open("data/url_workload.txt");
+	datasetfile.open("data.nosync/url_dataset.txt");
+    workloadfile.open("data.nosync/url_workload.txt");
 
 	// nameFileout.open("..datasets/emails-validated-random-only-30-characters.txt.sorted");
 	nameFileout.open("../datasets.nosync/url_data_set.txt");
@@ -48,7 +50,9 @@ int urls(){
 
 	while(std::getline(nameFileout, line)){
 
-        double r = rand()/RAND_MAX;
+        // double r = rand()/RAND_MAX;
+        double r = (rand() * 1.0) /RAND_MAX;
+
 		if (r > 0.5){
             datasetfile<<line<<endl;
 		} else {
@@ -63,7 +67,7 @@ int urls(){
 }
 
 int main(){
-    emails();
+    // emails();
     urls();
     return 0;
 }
