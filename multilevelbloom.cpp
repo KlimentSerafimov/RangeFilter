@@ -38,7 +38,8 @@ int create_multi_level_bfs(vector<bloom_filter> bfs, vector<string> keys){
 	// std::vector<bloom_filter> bfs;
 	ifstream nameFileout;
 	// change this to read from datasets dataset
-	nameFileout.open("datasets/emails-validated-random-only-30-characters.txt.sorted");
+	nameFileout.open("data/emails_dataset.txt");
+	// nameFileout.open("data/urls_dataset.txt");
 	string line;
 
 	while(std::getline(nameFileout, line)){
@@ -119,7 +120,10 @@ int query_bloom_filters(vector<string> keys, vector<bloom_filter> bfs){
 
 	ifstream nameFileout;
 	// change this to read from workload dataset
-	nameFileout.open("datasets/emails-validated-random-only-30-characters.txt.sorted");
+	nameFileout.open("data/emails_workload.txt");
+	// nameFileout.open("data/url_workload.txt");
+
+
 	string line;
 	std::vector<std::string> left_keys;
 	std::vector<std::string> right_keys;
@@ -145,10 +149,10 @@ int query_bloom_filters(vector<string> keys, vector<bloom_filter> bfs){
 		} else if (bf_query_result == 0 && binary_search_result == 0){
 			tn += 1;
 		}
-
 	}
 
 	fpr = fp / (fp + tn);
+	cout<<"fpr: "<<fpr<<endl;
 	return 0;
 }
 
@@ -182,7 +186,10 @@ int main(){
 	vector<bloom_filter> bfs;
 	vector<string> keys;
 	int return_code = create_multi_level_bfs(bfs, keys);
+	cout<<"keys: "<<keys.size()<<endl;
+	
 	query_bloom_filters(keys, bfs);
+
 	return 0;
 }
 
