@@ -182,6 +182,15 @@ int query_binary_search(vector<string> keys, string left_key, string right_key){
 	}
 }
 
+int get_bf_memory(vector<bloom_filter> bfs){
+	int total_mem = 0;
+	for (int i = 0; i < bfs.size(); i++){
+		total_mem += bfs[i].get_memory();
+	}
+	cout<<"total bloom filter space: "<<total_mem<<endl;
+	return total_mem;
+}
+
 int main(){
 	vector<bloom_filter> bfs;
 	vector<string> keys;
@@ -189,7 +198,8 @@ int main(){
 	cout<<"keys: "<<keys.size()<<endl;
 	
 	query_bloom_filters(keys, bfs);
-
+	get_bf_memory(bfs);
+	
 	return 0;
 }
 

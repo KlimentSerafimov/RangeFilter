@@ -3,4 +3,4 @@ cmake-build-debug/
 *.out
 *.vscode
 data.nosync/
-
+*.zip
