@@ -29,7 +29,7 @@
 #include <vector>
 #include <fstream>
 
-#include "bloom_filter.hpp"
+#include "bloom/bloom_filter.hpp"
 
 using namespace std;
 
@@ -73,6 +73,33 @@ int create_multi_level_bfs(vector<bloom_filter> bfs, vector<string> keys){
 	}
 
    return 0;
+}
+
+
+// TODO: implement binary search to determine true positives
+
+int query_binary_search(vector<string> keys, string left_key, string right_key){
+
+	int i = 0;
+	while (left_key[i] == right_key[i]){
+		// if dataset does not contain a common prefix, retuurn false
+		if(!binary_search(keys.begin(), keys.end(), left_key.substr(0, i + 1))){
+			return 0;
+		}
+		i += 1;
+
+	}
+
+	// gotten past common substring;
+	// query left_key[i] .... right_key[i] on BF
+	// edge case: BF for a certain index doesn't exist
+	// bounds checking: make sure right_key[i] is within the a-z || A-Z bounds
+	for (char ch = left_key[i]; ch < right_key[i] + 1; ch++){
+		if (binary_search(keys.begin(), keys.end(),left_key.substr(0, i) + ch)){
+			return 1;
+		}
+	return 0;
+	}
 }
 
 /*
@@ -156,31 +183,6 @@ int query_bloom_filters(vector<string> keys, vector<bloom_filter> bfs){
 	return 0;
 }
 
-// TODO: implement binary search to determine true positives
-
-int query_binary_search(vector<string> keys, string left_key, string right_key){
-
-	int i = 0;
-	while (left_key[i] == right_key[i]){
-		// if dataset does not contain a common prefix, retuurn false
-		if(!binary_search(keys.begin(), keys.end(), left_key.substr(0, i + 1))){
-			return 0;
-		}
-		i += 1;
-
-	}
-
-	// gotten past common substring;
-	// query left_key[i] .... right_key[i] on BF
-	// edge case: BF for a certain index doesn't exist
-	// bounds checking: make sure right_key[i] is within the a-z || A-Z bounds
-	for (char ch = left_key[i]; ch < right_key[i] + 1; ch++){
-		if (binary_search(keys.begin(), keys.end(),left_key.substr(0, i) + ch)){
-			return 1;
-		}
-	return 0;
-	}
-}
 
 int main(){
 	vector<bloom_filter> bfs;
