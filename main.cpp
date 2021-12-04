@@ -769,6 +769,12 @@ int main() {
 
     string file_path = file_folder + file_name;
 
+    bool do_extract_dataset = false;
+    if (do_extract_dataset) {
+        extract_dataset(file_path, "80M_dataset.txt", 80000000);
+        return 0;
+    }
+
     workload_seed_and_dataset = read_dataset(file_path);
 
     cout << "workload_seed_and_dataset.size() " << workload_seed_and_dataset.size() << endl;
