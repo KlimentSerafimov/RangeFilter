@@ -12,13 +12,13 @@
 void Trie::insert(string key){
     Trie *curr = this;
 
-    for (int i = 0; i < key.length(); i++){
+    for (int i = 0; i < (int)key.length(); i++){
         // if path doesn't exist, create a new node
-        if (curr->character[key[i]] == nullptr){
-            curr->character[key[i]] = new Trie(this);
+        if (curr->character[(int)key[i]] == nullptr){
+            curr->character[(int)key[i]] = new Trie(this);
         }
         // go to next node
-        curr = curr->character[key[i]];
+        curr = curr->character[(int)key[i]];
     }
     // mark the last iterated node as a leaf
     curr->isleaf = true;
@@ -27,14 +27,10 @@ void Trie::insert(string key){
 
 // search a key in Trie
 bool Trie::search(string key){
-    // base case: Trie is empty, return false
-    if (this == nullptr){
-        return false;
-    }
     Trie *curr = this;
-    for (int i = 0; i < key.length(); i++){
+    for (int i = 0; i < (int)key.length(); i++){
         // go to the next node
-        curr = curr->character[key[i]];
+        curr = curr->character[(int)key[i]];
         // if the string is invalid, reached the end of a path
         if (curr == nullptr){
             return false;
@@ -57,7 +53,7 @@ bool Trie::query(string left, string right) {
     if(left[0] == right[0])
     {
         char c = left[0];
-        if(character[c] == nullptr)
+        if(character[(int)c] == nullptr)
         {
             return false;
         }
@@ -67,7 +63,7 @@ bool Trie::query(string left, string right) {
             string right_rec = right.substr(1, right.size()-1);
             if(left_rec.empty())
             {
-                if(character[c]->isleaf)
+                if(character[(int)c]->isleaf)
                 {
                     return true;
                 }
@@ -75,26 +71,26 @@ bool Trie::query(string left, string right) {
             }
             if(right_rec.empty())
             {
-                if(character[c]->isleaf)
+                if(character[(int)c]->isleaf)
                 {
                     assert(false);
                 }
                 return false;
             }
-            return character[c]->query(left_rec, right_rec);
+            return character[(int)c]->query(left_rec, right_rec);
         }
     }
 
     for(char c = (char)((int)left[0]+1); c <= (char)((int)right[0]-1); c++)
     {
-        if(character[c] != nullptr)
+        if(character[(int)c] != nullptr)
         {
             return true;
         }
     }
 
     {
-        if(character[left[0]] == nullptr)
+        if(character[(int)left[0]] == nullptr)
         {
 
         }
@@ -102,7 +98,7 @@ bool Trie::query(string left, string right) {
             string right_rec;
             string left_rec = left.substr(1, left.size() - 1);
             if (left_rec.empty()) {
-                if(character[left[0]]->isleaf)
+                if(character[(int)left[0]]->isleaf)
                 {
                     breakpoint(true);
                     return true;
@@ -114,7 +110,7 @@ bool Trie::query(string left, string right) {
                     right_rec += last_char;
                 }
             }
-            bool ret = character[left[0]]->query(left_rec, right_rec);
+            bool ret = character[(int)left[0]]->query(left_rec, right_rec);
 
             if (ret) {
                 return ret;
@@ -123,13 +119,13 @@ bool Trie::query(string left, string right) {
     }
 
     {
-        if(character[right[0]] == nullptr)
+        if(character[(int)right[0]] == nullptr)
         {
             breakpoint(false);
             return false;
         }
 
-        if(character[right[0]]->isleaf)
+        if(character[(int)right[0]]->isleaf)
         {
 
             breakpoint(true);
@@ -148,7 +144,7 @@ bool Trie::query(string left, string right) {
             return false;
         }
 
-        bool ret = character[right[0]]->query(left_rec, right_rec);
+        bool ret = character[(int)right[0]]->query(left_rec, right_rec);
         return ret;
     }
 }
@@ -173,8 +169,8 @@ bool Trie::deletion(Trie *&curr, string key){
     // if the end of the key is not reached, recurse on the next character node and if it returns true, delete the current node if it is not a leaf
     if (key.length()){
         if (curr != nullptr &&
-            curr->character[key[0]] != nullptr &&
-            deletion(curr->character[key[0]], key.substr(1)) &&
+            curr->character[(int)key[0]] != nullptr &&
+            deletion(curr->character[(int)key[0]], key.substr(1)) &&
             curr->isleaf == false){
 
             if (!haveChildren(curr)){

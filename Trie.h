@@ -13,7 +13,7 @@
 
 using namespace std;
 
-#define CHAR_SIZE 256 // was 128
+#define CHAR_SIZE 128
 
 class Trie {
 
@@ -65,22 +65,20 @@ public:
         int char_count[127];
         memset(char_count, 0, sizeof(char_count));
 
-        for(int i = 0;i<dataset.size();i++)
+        for(int i = 0;i< (int)dataset.size();i++)
         {
             max_length = max(max_length, (int)dataset[i].size());
             total_num_chars+=(int)dataset[i].size();
-            for(int j = 0;j<dataset[i].size();j++)
+            for(int j = 0;j<(int)dataset[i].size();j++)
             {
                 last_char = (char)max((int)last_char, (int)dataset[i][j]);
                 init_char = (char)min((int)init_char, (int)dataset[i][j]);
-                char_count[dataset[i][j]] += 1;
+                char_count[(int)dataset[i][j]] += 1;
             }
         }
 
-        cout << last_char << endl;
-        cout << init_char << endl;
 
-        for(int i = 0;i<dataset.size();i++)
+        for(int i = 0;i<(int)dataset.size();i++)
         {
             insert(dataset[i]);
         }

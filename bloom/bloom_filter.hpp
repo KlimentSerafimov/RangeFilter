@@ -620,7 +620,12 @@ protected:
 public:
     int get_memory()
     {
-        return ((int)bit_table_.size()*(int)sizeof(unsigned char)) + salt_.size()*sizeof(bloom_type) + sizeof(unsigned int) + 4*sizeof(unsigned long) + sizeof(double);
+        return (((int)bit_table_.size())*sizeof(unsigned char)) + ((int)salt_.size())*sizeof(bloom_type) + sizeof(unsigned int) + 4*sizeof(unsigned long) + sizeof(double);
+    }
+
+    int get_memory_in_bits()
+    {
+        return get_memory()*8;
     }
 };
 
