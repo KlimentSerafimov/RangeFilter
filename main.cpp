@@ -323,7 +323,7 @@ public:
     }
 
 
-    int get_memory() {
+    unsigned long long get_memory() {
         return bf.get_memory();
     }
 };
@@ -387,8 +387,6 @@ void eval_trie_vs_rf()
 
 }
 
-#include "surf/surf_implementation.h"
-
 vector<string> read_dataset(const string& file_path)
 {
     vector<string> dataset;
@@ -436,64 +434,8 @@ void extract_dataset(string file_path, string dest_path, int num_keys)
     out_file.close();
 }
 
-class RangeFilterStats
-{
-public:
-    int input_size;
-    float seed_fpr;
-    int num_keys;
-    int num_queries;
-    int num_false_positives;
-    int num_negatives;
-    int memory;
-    RangeFilterStats(
-            int _input_size,
-            float _seed_fpr,
-            int _num_keys,
-            int _num_queries,
-            int _num_false_positives,
-            int _num_negatives,
-            int _memory):
-            input_size(_input_size),
-            seed_fpr(_seed_fpr),
-            num_keys(_num_keys),
-            num_queries(_num_queries),
-            num_false_positives(_num_false_positives),
-            num_negatives(_num_negatives),
-            memory(_memory){}
 
-    string to_string() {
-        string ret;
-        ret += "size\t"+std::to_string(input_size)+"\tseed_fpr\t"+std::to_string(seed_fpr)+"\tbits_per_key\t"+std::to_string(bits_per_key())+"\tfalse_positive_rate\t"+std::to_string(false_positive_rate());
-        return ret;
-    }
-
-    double false_positive_rate() const
-    {
-        return (double)num_false_positives/num_negatives*100.0;
-    }
-
-    double bits_per_key()
-    {
-        return (double)memory/num_keys*100.0;
-    }
-};
-
-bool contains(const vector<string>& dataset, string left, string right)
-{
-    auto at = lower_bound(dataset.begin(), dataset.end(), left);
-    if(at == dataset.end())
-    {
-        return false;
-    }
-    if(*at > right)
-    {
-        return false;
-    }
-
-    return true;
-
-}
+#include "surf/surf_implementation.h"
 
 RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<pair<string, string> >& workload, int size, float seed_fpr, Trie* trie)
 {
@@ -550,7 +492,7 @@ RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<p
             (int)workload.size(),
             num_false_positives,
             num_negative,
-            (int)rf.get_memory());
+            (int)rf.get_memory()*8);
 
     return ret;
 }
@@ -684,8 +626,9 @@ int test_bloom_filter()
 
 vector<pair<string, string> > workload;
 
-void prep_dataset_and_workload(const string& file_path)
+int prep_dataset_and_workload(const string& file_path)
 {
+
 
     workload_seed_and_dataset = read_dataset(file_path);
 
@@ -701,7 +644,7 @@ void prep_dataset_and_workload(const string& file_path)
         if (i < workload_seed_and_dataset.size() / 2) {
             workload_seed.push_back(workload_seed_and_dataset[i]);
         } else {
-            num_bf_inserts += (int)workload_seed_and_dataset[i].size()+1;
+            num_bf_inserts+=(int)workload_seed_and_dataset[i].size()+1;
             dataset.push_back(workload_seed_and_dataset[i]);
         }
         if((i+1)%10000000 == 0)
@@ -736,33 +679,57 @@ void prep_dataset_and_workload(const string& file_path)
 
     }
 
-
     cout << "workload size " << workload_seed.size() << endl;
     cout << "dataset size " << dataset.size() << endl;
-    cout << "num_bf_inserts" << num_bf_inserts << endl;
+    cout << "num_bf_inserts " << num_bf_inserts << endl;
 
     int num_negatives = get_num_negatives(dataset, workload);
 
     cout << "num_negatives " << num_negatives << endl;
     cout << "num_positives " << workload.size() - num_negatives << endl;
     cout << "num_negatives(%) " << (float)num_negatives/(float)workload.size()*100.0 << endl;
+
+    long long sum_memory_in_bits = sizeof(dataset);
+    for(size_t i = 0; i<dataset.size();i++)
+    {
+        for(size_t j = 0;j<dataset[i].size();j++)
+        {
+            assert(sizeof(dataset[i][j]) == 1);
+            sum_memory_in_bits+=8*sizeof(dataset[i][j]);
+        }
+    }
+    cout << "num_bits_in_dataset " << sum_memory_in_bits << endl;
+    cout << "bits_per_key  " << (float)sum_memory_in_bits/dataset.size() << endl;
+
+    return num_bf_inserts;
 }
 
-int test_surf()
+int main_test_surf()
 {
-
     string file_folder = "";
-    string file_name = "5M_dataset.txt";
+    string file_name = "30M_dataset.txt";
 
     prep_dataset_and_workload(file_folder+file_name);
 
-    //todo
+    for(int trie_size = 2; trie_size <= 30; trie_size+=2) {
+        RangeFilterStats surf_ret = test_surf(dataset, workload, trie_size);
 
+        cout << surf_ret.to_string() << endl;
+    }
+    return 0;
 }
 
+
 int main() {
+
+//    test_bloom_filter();
+//    return 0;
+//    main_test_surf();
+//
+//    return 0;
+
     string file_folder = "";
-    string file_name = "80M_dataset.txt";
+    string file_name = "5M_dataset.txt";
 
 //    string file_folder = "/home/kliment/Downloads/";
 //    string file_name = "emails-validated-random-only-30-characters.txt.sorted";
@@ -775,76 +742,13 @@ int main() {
         return 0;
     }
 
-    workload_seed_and_dataset = read_dataset(file_path);
-
-    cout << "workload_seed_and_dataset.size() " << workload_seed_and_dataset.size() << endl;
-
-    cout <<"shuffling" << endl;
-    shuffle(workload_seed_and_dataset.begin(), workload_seed_and_dataset.end(), std::default_random_engine(0));
-    cout <<"done shuffling" << endl;
-    cout << "splitting" << endl;
-
-    int num_bf_inserts = 0;
-    for (size_t i = 0; i < workload_seed_and_dataset.size(); i++) {
-        if (i < workload_seed_and_dataset.size() / 2) {
-            workload_seed.push_back(workload_seed_and_dataset[i]);
-        } else {
-            num_bf_inserts += (int)workload_seed_and_dataset[i].size()+1;
-            dataset.push_back(workload_seed_and_dataset[i]);
-        }
-        if((i+1)%10000000 == 0)
-        {
-            cout << "num_split " << i+1 << endl;
-        }
-    }
-
-    cout << "done splitting" << endl;
-
-    workload_seed_and_dataset.clear();
-
-    cout << "sorting" << endl;
-
-    sort(workload_seed.begin(), workload_seed.end());
-    sort(dataset.begin(), dataset.end());
-
-    cout << "done sorting"<< endl;
-
-    for(size_t i = 0;i<workload_seed.size();i++)
-    {
-        string left_key = workload_seed[i];
-        string right_key = left_key;
-        right_key[right_key.length() - 1]++;
-
-        workload.emplace_back(make_pair(left_key, right_key));
-
-        if((i+1)%10000000 == 0)
-        {
-            cout << "num_workloads converted " << i+1 << endl;
-        }
-
-    }
-
-
-    cout << "workload size " << workload_seed.size() << endl;
-    cout << "dataset size " << dataset.size() << endl;
-    cout << "num_bf_inserts" << num_bf_inserts << endl;
+    int num_bf_inserts = prep_dataset_and_workload(file_path);
 
     ofstream output_file("results.out");
 
-//    Trie trie = Trie(dataset);
-
-    Trie* trie_p = nullptr;
-
-    int num_negatives = get_num_negatives(dataset, workload);
-
-    cout << "num_negatives " << num_negatives << endl;
-    cout << "num_positives " << workload.size() - num_negatives << endl;
-    cout << "num_negatives(%) " << (float)num_negatives/(float)workload.size()*100.0 << endl;
-
-
-//    int init_size = (int) dataset.size()*3;
-//    for(int size = init_size; size<init_size*30;size*=sqrt(2))
-//    {
+    int init_size = num_bf_inserts/4;
+    for(int size = init_size; size<=num_bf_inserts;size*=sqrt(2))
+    {
         const int num_seed_fprs = 11;
         float seed_fprs[num_seed_fprs] = {
 //                0.00001, 0.0001,
@@ -863,11 +767,13 @@ int main() {
                 //0.95, 0.99
         };
         for(int seed_fpr_id = 0; seed_fpr_id < num_seed_fprs; seed_fpr_id++) {
-            RangeFilterStats ret = test_range_filter(dataset, workload, num_bf_inserts, seed_fprs[seed_fpr_id], trie_p);
+            RangeFilterStats ret = test_range_filter(dataset, workload, size, seed_fprs[seed_fpr_id], nullptr);
             output_file << ret.to_string() << endl;
+            cout << ret.to_string() << endl;
         }
         output_file << endl;
-//    }
+        cout << endl;
+    }
 
     output_file.close();
 

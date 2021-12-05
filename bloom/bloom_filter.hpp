@@ -618,12 +618,12 @@ protected:
    double                     desired_false_positive_probability_;
 
 public:
-    int get_memory()
+    unsigned long long get_memory()
     {
-        return (((int)bit_table_.size())*sizeof(unsigned char)) + ((int)salt_.size())*sizeof(bloom_type) + sizeof(unsigned int) + 4*sizeof(unsigned long) + sizeof(double);
+        return sizeof(bloom_filter) + (((int)bit_table_.size())*sizeof(unsigned char)) + ((int)salt_.size())*sizeof(bloom_type) + sizeof(unsigned int) + 4*sizeof(unsigned long) + sizeof(double);
     }
 
-    int get_memory_in_bits()
+    unsigned long long get_memory_in_bits()
     {
         return get_memory()*8;
     }
