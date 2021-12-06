@@ -20,30 +20,13 @@ using namespace std;
 
 class MultiBloomParams: public PointQueryParams
 {
-    double seed_fpr{};
-    int cutoff{};
+    double seed_fpr;
+    int cutoff;
 public:
-
-    int get_cutoff() const
-    {
-        return cutoff;
-    }
-
-    double get_seed_fpr() const
-    {
-        return seed_fpr;
-    }
-
-    MultiBloomParams() = default;
-
-    MultiBloomParams(double _seed_fpr, int _cutoff): seed_fpr(_seed_fpr), cutoff(_cutoff)
-    {
-
-    }
-
+    MultiBloomParams(double _seed_fpr, int _cutoff): seed_fpr(_seed_fpr), cutoff(_cutoff) {}
     string to_string() override
     {
-        return "seed_fpr\t" + std::to_string(seed_fpr) + "\tcutoff\t"+std::to_string(cutoff);
+        return "seed_fpr\t" + std::to_string(seed_fpr) + "\tcutoff\t" + std::to_string(cutoff);
     }
 };
 
@@ -54,7 +37,8 @@ class MultiBloom: public PointQuery
     int max_length{};
     vector<set<string> > unique_prefixes_per_level;
     vector<int> num_prefixes_per_level;
-    MultiBloomParams seed_params;
+    int cutoff{};
+    double seed_fpr{};
 
     void calc_metadata(const vector<string>& dataset, const vector<pair<string, string> >& workload, bool do_print)
     {
@@ -118,9 +102,9 @@ class MultiBloom: public PointQuery
         vector<int> num_inserts_per_level;
         bfs = vector<bloom_filter>();
         size_t max_lvl = params.size();
-        if(seed_params.get_cutoff() != -1)
+        if(cutoff != -1)
         {
-            max_lvl = (size_t)seed_params.get_cutoff();
+            max_lvl = (size_t)cutoff;
         }
         for(size_t i = 0;i<max_lvl;i++)
         {
@@ -134,13 +118,13 @@ public:
 
     MultiBloom()= default;
 
-    MultiBloom(const vector<string>& dataset, const vector<pair<string, string> >& workload, MultiBloomParams _seed_params, bool do_print = false):
-    seed_params(std::move(_seed_params)){
+    MultiBloom(const vector<string>& dataset, const vector<pair<string, string> >& workload, double _seed_fpr, int _cutoff = -1, bool do_print = false):
+    cutoff(_cutoff), seed_fpr(_seed_fpr){
         calc_metadata(dataset, workload, do_print);
 
         vector<pair<int, double> > params;
         for(size_t i = 0;i<num_prefixes_per_level.size();i++){
-            params.emplace_back(num_prefixes_per_level[i], seed_params.get_seed_fpr());
+            params.emplace_back(num_prefixes_per_level[i], seed_fpr);
         }
 
         init(params);
@@ -148,7 +132,7 @@ public:
 
     bool contains(string s) override
     {
-        if(seed_params.get_cutoff() != -1 && (int)lvl(s) >= seed_params.get_cutoff())
+        if(cutoff != -1 && (int)lvl(s) >= cutoff)
         {
             return true;
         }
@@ -164,7 +148,7 @@ public:
 
     void insert(string s ) override
     {
-        if(seed_params.get_cutoff() != -1 && (int)lvl(s) >= seed_params.get_cutoff())
+        if(cutoff != -1 && (int)lvl(s) >= cutoff)
         {
             //assume inserted;
         }
@@ -184,7 +168,7 @@ public:
         {
             ret+=bfs[i].get_memory();
         }
-        return ret + sizeof(MultiBloom);
+        return ret + sizeof(vector<bloom_filter>) + 2*sizeof(int) + sizeof(vector<set<string> >) + sizeof(vector<int>) + sizeof(double);
     }
 
     void clear() override
@@ -194,6 +178,10 @@ public:
             bfs[i].clear_memory();
         }
         bfs.clear();
+    }
+    PointQueryParams* get_params() override
+    {
+        return new MultiBloomParams(seed_fpr, -1);
     }
 };
 

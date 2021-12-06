@@ -13,8 +13,6 @@
 
 using namespace std;
 
-
-
 void eval_trie_vs_rf()
 {
     vector<string> dataset;
@@ -64,7 +62,7 @@ void eval_trie_vs_rf()
     queries.emplace_back(make_pair("cbb", "ddd"));
     queries.emplace_back(make_pair("bbb", "cdd"));
 
-    auto* multi_bloom = new MultiBloom(dataset, queries, MultiBloomParams(0.0001, -1), true);
+    auto* multi_bloom = new MultiBloom(dataset, queries, 0.0001, -1, true);
     RangeFilterTemplate rf(dataset, queries, multi_bloom, true);
 
     cout << "start eval" << endl;
@@ -129,7 +127,7 @@ void extract_dataset(string file_path, string dest_path, int num_keys)
 }
 
 
-RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<pair<string, string> >& workload, int size, float seed_fpr, RangeFilterTemplate* rf)
+RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<pair<string, string> >& workload, RangeFilterTemplate* rf)
 {
     int num_positive = 0;
     int num_negative = 0;
@@ -188,8 +186,7 @@ RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<p
 
 
     RangeFilterStats ret(
-            size,
-            seed_fpr,
+            rf->get_params(),
             (int)dataset.size(),
             (int)workload.size(),
             num_false_positives,
@@ -442,7 +439,7 @@ int main_test_surf(const string& file_path)
     prep_dataset_and_workload(file_path, "easy");
 
     for(int trie_size = 2; trie_size <= 30; trie_size+=2) {
-        RangeFilterStats surf_ret = test_surf(dataset, workload, trie_size);
+        SurfStats surf_ret = test_surf(dataset, workload, trie_size);
 
         cout << surf_ret.to_string() << endl;
     }
@@ -463,6 +460,7 @@ int main() {
         return 0;
     }
 
+//    micro unit tests
 //    eval_trie_vs_rf();
 //    return 0;
 
@@ -507,18 +505,16 @@ int main() {
         bool do_print = true;
         if(range_filter_type == "one_bloom")
         {
-            OneBloomParams params = OneBloomParams(seed_fprs[seed_fpr_id]);
-            pq = new OneBloom(dataset, workload, params, do_print);
+            pq = new OneBloom(dataset, workload, seed_fprs[seed_fpr_id], do_print);
         }
         else if (range_filter_type == "multi_bloom") {
-            MultiBloomParams params = MultiBloomParams(seed_fprs[seed_fpr_id], -1);
-            pq = new MultiBloom(dataset, workload, params, do_print);
+            pq = new MultiBloom(dataset, workload, seed_fprs[seed_fpr_id], -1, do_print);
         }
         else {
             assert(false);
         }
         auto* rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
-        RangeFilterStats ret = test_range_filter(dataset, workload, -1, seed_fprs[seed_fpr_id], rf);
+        RangeFilterStats ret = test_range_filter(dataset, workload, rf);
         rf->clear();
         output_file << ret.to_string() << endl;
         cout << ret.to_string() << endl;

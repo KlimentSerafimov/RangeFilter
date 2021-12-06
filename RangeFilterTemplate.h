@@ -315,19 +315,6 @@ public:
                 return false;
             }
         }
-
-    }
-
-    string get_init_char() {
-        string ret;
-        ret+=init_char;
-        return ret;
-    }
-
-    string get_last_char() {
-        string ret;
-        ret+=last_char;
-        return ret;
     }
 
 
@@ -338,6 +325,11 @@ public:
     void clear()
     {
         pq->clear();
+    }
+
+    PointQueryParams* get_params()
+    {
+        return pq->get_params();
     }
 };
 
