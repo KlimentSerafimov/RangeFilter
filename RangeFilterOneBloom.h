@@ -7,6 +7,7 @@
 
 #include "bloom/bloom_filter.hpp"
 #include <cassert>
+#include <utility>
 #include <vector>
 #include <string>
 #include <cstring>
@@ -16,11 +17,30 @@
 
 using namespace std;
 
+class OneBloomParams: public PointQueryParams
+{
+    double seed_fpr{};
+public:
+    OneBloomParams() = default;
+    explicit OneBloomParams(double _seed_fpr): seed_fpr(_seed_fpr) {}
+
+    double get_seed_fpr() const
+    {
+        return seed_fpr;
+    }
+
+    string to_string() override
+    {
+        return "seed_fpr\t" + std::to_string(get_seed_fpr());
+    }
+};
+
 class OneBloom: public PointQuery
 {
     bloom_filter bf;
+    OneBloomParams seed_params;
 
-    long long total_num_chars;
+    long long total_num_chars{};
     void calc_metadata(const vector<string>& dataset, const vector<pair<string, string> >& workload, bool do_print)
     {
         total_num_chars = 0;
@@ -44,9 +64,10 @@ public:
 
     OneBloom() = default;
 
-    OneBloom(const vector<string>& dataset, const vector<pair<string, string> >& workload, double fpr, bool do_print = false) {
+    OneBloom(const vector<string>& dataset, const vector<pair<string, string> >& workload, OneBloomParams _seed_params, bool do_print = false):
+            seed_params(std::move(_seed_params)){
         calc_metadata(dataset, workload, do_print);
-        bloom_parameters params = get_bloom_parameters(total_num_chars, fpr);
+        bloom_parameters params = get_bloom_parameters(total_num_chars, seed_params.get_seed_fpr());
         bf = bloom_filter(params);
     }
 
@@ -68,19 +89,6 @@ public:
     {
         bf.clear_memory();
     }
-};
-
-class RangeFilterOneBloom: public RangeFilterTemplate<OneBloom>
-{
-
-public:
-
-
-    RangeFilterOneBloom(const vector<string>& dataset, const vector<pair<string, string> >& workload, double fpr, bool do_print = false):
-            RangeFilterTemplate<OneBloom>(dataset, workload, fpr, do_print)
-    {
-    }
-
 };
 
 

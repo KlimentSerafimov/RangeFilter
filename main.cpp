@@ -64,7 +64,8 @@ void eval_trie_vs_rf()
     queries.emplace_back(make_pair("cbb", "ddd"));
     queries.emplace_back(make_pair("bbb", "cdd"));
 
-    RangeFilterMultiBloom rf(dataset, queries, vec);
+    auto* multi_bloom = new MultiBloom(dataset, queries, MultiBloomParams(0.0001, -1), true);
+    RangeFilterTemplate rf(dataset, queries, multi_bloom, true);
 
     cout << "start eval" << endl;
     for(auto q: queries)
@@ -128,7 +129,7 @@ void extract_dataset(string file_path, string dest_path, int num_keys)
 }
 
 
-RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<pair<string, string> >& workload, int size, float seed_fpr, RangeFilterTemplateTemplate* rf)
+RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<pair<string, string> >& workload, int size, float seed_fpr, RangeFilterTemplate* rf)
 {
     int num_positive = 0;
     int num_negative = 0;
@@ -455,7 +456,7 @@ int main() {
     string file_folder = "";
     string file_name = "1M_dataset.txt";
     string workload_difficulty = "easy";
-    string range_filter_type = "multi_bloom"; // choose from "surf", "one_bloom", "multi_bloom"
+    string range_filter_type = "one_bloom"; // choose from "surf", "one_bloom", "multi_bloom"
 
     if(range_filter_type == "surf") {
         main_test_surf(file_folder + file_name);
@@ -483,44 +484,47 @@ int main() {
 
     ofstream output_file("results.out");
 
-        const int num_seed_fprs = 15;
-        float seed_fprs[num_seed_fprs] = {
-                0.00001,
-                0.0001,
-                0.001,
-                0.005,
-                0.01,
-                0.05,
-                0.1,
-                0.2,
-                0.3,
-                0.4,
-                0.5,
-                0.6,
-                0.7,
-                0.8,
-                0.9,
-        };
-        for(int seed_fpr_id = 0; seed_fpr_id < num_seed_fprs; seed_fpr_id++) {
-            RangeFilterTemplateTemplate* rf;
-            if(range_filter_type == "one_bloom")
-            {
-                rf = new RangeFilterTemplate<OneBloom>(
-                        dataset, workload, seed_fprs[seed_fpr_id], true);
-            }
-            else if (range_filter_type == "multi_bloom")
-                rf = new RangeFilterTemplate<MultiBloom>(
-                        dataset, workload, seed_fprs[seed_fpr_id], true);
-            else {
-                assert(false);
-            }
-            RangeFilterStats ret = test_range_filter(dataset, workload, -1, seed_fprs[seed_fpr_id], rf);
-            rf->clear();
-            output_file << ret.to_string() << endl;
-            cout << ret.to_string() << endl;
+    const int num_seed_fprs = 15;
+    float seed_fprs[num_seed_fprs] = {
+            0.00001,
+            0.0001,
+            0.001,
+            0.005,
+            0.01,
+            0.05,
+            0.1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+    };
+    for(int seed_fpr_id = 0; seed_fpr_id < num_seed_fprs; seed_fpr_id++) {
+        PointQuery* pq;
+        bool do_print = true;
+        if(range_filter_type == "one_bloom")
+        {
+            OneBloomParams params = OneBloomParams(seed_fprs[seed_fpr_id]);
+            pq = new OneBloom(dataset, workload, params, do_print);
         }
-        output_file << endl;
-        cout << endl;
+        else if (range_filter_type == "multi_bloom") {
+            MultiBloomParams params = MultiBloomParams(seed_fprs[seed_fpr_id], -1);
+            pq = new MultiBloom(dataset, workload, params, do_print);
+        }
+        else {
+            assert(false);
+        }
+        auto* rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
+        RangeFilterStats ret = test_range_filter(dataset, workload, -1, seed_fprs[seed_fpr_id], rf);
+        rf->clear();
+        output_file << ret.to_string() << endl;
+        cout << ret.to_string() << endl;
+    }
+    output_file << endl;
+    cout << endl;
 
     output_file.close();
 

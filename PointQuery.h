@@ -8,6 +8,15 @@
 #include <string>
 using namespace std;
 
+class PointQueryParams
+{
+public:
+    virtual string to_string()
+    {
+        assert(false);
+    }
+};
+
 class PointQuery
 {
 public:

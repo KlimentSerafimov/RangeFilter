@@ -10,31 +10,13 @@
 #include <cstring>
 #include <iostream>
 #include <cassert>
+#include "PointQuery.h"
 
 using namespace std;
 
-class RangeFilterTemplateTemplate
+class RangeFilterTemplate
 {
-public:
-    virtual bool query(string left, string right)
-    {
-        assert(false);
-    }
-
-    virtual unsigned long long get_memory() {
-        assert(false);
-    }
-
-    virtual void clear()
-    {
-        assert(false);
-    }
-};
-
-template<typename PointQuery>
-class RangeFilterTemplate: public RangeFilterTemplateTemplate
-{
-    PointQuery pq;
+    PointQuery* pq;
     char last_char{};
     char init_char{};
     char is_leaf_char{};
@@ -107,7 +89,7 @@ class RangeFilterTemplate: public RangeFilterTemplateTemplate
 
     bool contains(string s)
     {
-        return pq.contains(s);
+        return pq->contains(s);
     }
     void insert_prefixes(const vector<string>& dataset){
         long long num_inserted = 0;
@@ -115,7 +97,7 @@ class RangeFilterTemplate: public RangeFilterTemplateTemplate
             string prefix;
             for(size_t j = 0;j<dataset[i].size();j++) {
                 prefix+=dataset[i][j];
-                pq.insert(prefix);
+                pq->insert(prefix);
 
                 num_inserted += 1;
                 if ((num_inserted) % 100000000 == 0) {
@@ -123,7 +105,7 @@ class RangeFilterTemplate: public RangeFilterTemplateTemplate
                 }
             }
             prefix+=is_leaf_char;
-            pq.insert(prefix);
+            pq->insert(prefix);
 
             num_inserted += 1;
             if ((num_inserted) % 100000000 == 0) {
@@ -166,22 +148,14 @@ class RangeFilterTemplate: public RangeFilterTemplateTemplate
 
 public:
 
-    RangeFilterTemplate(const vector<string>& dataset, const vector<pair<string, string> >& workload, double fpr, bool do_print = false)
+    RangeFilterTemplate(const vector<string>& dataset, const vector<pair<string, string> >& workload, PointQuery* _pq, bool do_print = false):
+    pq(_pq)
     {
         calc_metadata(dataset, workload, do_print);
-        pq = PointQuery(dataset, workload, fpr, do_print);
         insert_prefixes(dataset);
     }
 
-    RangeFilterTemplate(const vector<string>& dataset, const vector<pair<string, string> >& workload, vector<pair<int, double> > params, bool do_print = false)
-    {
-        calc_metadata(dataset, workload, do_print);
-        pq = PointQuery(dataset, workload, params, do_print);
-        insert_prefixes(dataset);
-    }
-
-
-    bool query(string left, string right) override
+    bool query(string left, string right)
     {
         assert(str_invariant(left));
         assert(str_invariant(right));
@@ -357,13 +331,13 @@ public:
     }
 
 
-    unsigned long long get_memory() override {
-        return pq.get_memory() + 3*sizeof(char) + sizeof(int) + sizeof(long long);
+    unsigned long long get_memory() {
+        return pq->get_memory() + 3*sizeof(char) + sizeof(int) + sizeof(long long);
     }
 
-    void clear() override
+    void clear()
     {
-        pq.clear();
+        pq->clear();
     }
 };
 
