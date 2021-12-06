@@ -445,6 +445,9 @@ int main_test_surf(const string& file_path)
     }
     return 0;
 }
+void grid_search(const string& range_filter_type, ofstream& output_file);
+void simulated_annealing(ofstream& output_file);
+
 
 
 int main() {
@@ -452,10 +455,12 @@ int main() {
 
     string file_folder = "";
     string file_name = "1M_dataset.txt";
-    string workload_difficulty = "easy";
+    string workload_difficulty = "medium";
     string range_filter_type = "multi_bloom"; // choose from "surf", "one_bloom", "multi_bloom"
+    string parameter_search_style = "simulated_annealing"; // choose from "grid_search", "simulated_annealing"
 
-    if(range_filter_type == "surf") {
+    if (range_filter_type == "surf") {
+        assert(parameter_search_style == "grid_search");
         main_test_surf(file_folder + file_name);
         return 0;
     }
@@ -480,50 +485,89 @@ int main() {
 
     prep_dataset_and_workload(file_path, workload_difficulty);
 
-    ofstream output_file("results.out");
+    ofstream output_file = ofstream ("results.out");
 
-    const int num_seed_fprs = 15;
-    float seed_fprs[num_seed_fprs] = {
-            0.00001,
-            0.0001,
-            0.001,
-            0.005,
-            0.01,
-            0.05,
-            0.1,
-            0.2,
-            0.3,
-            0.4,
-            0.5,
-            0.6,
-            0.7,
-            0.8,
-            0.9,
-    };
-    for(int seed_fpr_id = 0; seed_fpr_id < num_seed_fprs; seed_fpr_id++) {
-        PointQuery* pq;
-        bool do_print = true;
-        if(range_filter_type == "one_bloom")
-        {
-            pq = new OneBloom(dataset, workload, seed_fprs[seed_fpr_id], do_print);
-        }
-        else if (range_filter_type == "multi_bloom") {
-            pq = new MultiBloom(dataset, workload, seed_fprs[seed_fpr_id], 10, do_print);
-        }
-        else {
-            assert(false);
-        }
-        auto* rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
-        RangeFilterStats ret = test_range_filter(dataset, workload, rf);
-        rf->clear();
-        output_file << ret.to_string() << endl;
-        cout << ret.to_string() << endl;
+    if(parameter_search_style == "grid_search") {
+        grid_search(range_filter_type, output_file);
     }
-    output_file << endl;
-    cout << endl;
+    else {
+        assert(range_filter_type == "multi_bloom");
+        simulated_annealing(output_file);
+    }
 
     output_file.close();
 
     return 0;
+}
+
+#include "Frontier.h"
+
+void simulated_annealing(ofstream& output_file)
+{
+    double seed_fpr = 0.01;
+    int seed_cutoff = 7;
+    bool do_print = true;
+
+    Frontier<MultiBloomParams> frontier(2);
+
+    PointQuery *pq;
+    pq = new MultiBloom(dataset, workload, seed_fpr, seed_cutoff, true);
+    auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
+
+    RangeFilterStats ret = test_range_filter(dataset, workload, rf);
+
+    assert(frontier.insert(*((MultiBloomParams*)ret.get_params()), ret.to_vector()));
+
+
+
+}
+
+void grid_search(const string& range_filter_type, ofstream& output_file){
+
+    for(int cutoff = 0; cutoff < 20; cutoff++) {
+
+        const int num_seed_fprs = 10;
+        float seed_fprs[num_seed_fprs] = {
+//                0.00001,
+                0.0001,
+                0.001,
+                0.005,
+                0.01,
+                0.05,
+                0.1,
+                0.2,
+                0.3,
+                0.4,
+                0.5,
+//                0.6,
+//                0.7,
+//                0.8,
+//                0.9,
+        };
+        for (int seed_fpr_id = 0; seed_fpr_id < num_seed_fprs; seed_fpr_id++) {
+            PointQuery *pq;
+            bool do_print = true;
+            if (range_filter_type == "one_bloom") {
+                pq = new OneBloom(dataset, workload, seed_fprs[seed_fpr_id], cutoff, do_print);
+            } else if (range_filter_type == "multi_bloom") {
+                pq = new MultiBloom(dataset, workload, seed_fprs[seed_fpr_id], cutoff, do_print);
+            } else {
+                assert(false);
+            }
+            auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
+            RangeFilterStats ret = test_range_filter(dataset, workload, rf);
+            rf->clear();
+            output_file << ret.to_string() << endl;
+            cout << ret.to_string() << endl;
+            if(ret.false_positive_rate() > 50)
+            {
+                output_file << "fpr too large; break;" << endl;
+                cout << "fpr too large; break;" << endl;
+                break;
+            }
+        }
+        output_file << endl;
+        cout << endl;
+    }
 
 }

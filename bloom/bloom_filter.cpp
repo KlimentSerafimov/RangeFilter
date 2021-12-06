@@ -7,22 +7,22 @@
 bloom_parameters get_bloom_parameters(long long size, double fpr)
 {
 
-bloom_parameters parameters;
+    bloom_parameters parameters;
 
-parameters.projected_element_count = size;
+    parameters.projected_element_count = size;
 
-parameters.false_positive_probability = fpr;
+    parameters.false_positive_probability = fpr;
 
-parameters.random_seed = 0xA5A5A5A5;
+    parameters.random_seed = 0xA5A5A5A5;
 
-if (!parameters)
-{
-std::cout << "Error - Invalid set of bloom filter parameters!" << std::endl;
-assert(false);
-return parameters;
-}
+    if (!parameters)
+    {
+    std::cout << "Error - Invalid set of bloom filter parameters!" << std::endl;
+    assert(false);
+    return parameters;
+    }
 
-parameters.compute_optimal_parameters();
+    parameters.compute_optimal_parameters();
 
-return parameters;
+    return parameters;
 }

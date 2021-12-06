@@ -84,6 +84,20 @@ public:
     {
         return ((double)total_num_bits / num_keys);
     }
+
+    vector<double> to_vector() const
+    {
+        vector<double> ret;
+        ret.emplace_back(bits_per_key());
+        ret.emplace_back(false_positive_rate());
+        return ret;
+    }
+
+
+    PointQueryParams* get_params() const
+    {
+        return params;
+    }
 };
 
 

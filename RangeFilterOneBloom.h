@@ -31,9 +31,11 @@ public:
 class OneBloom: public PointQuery
 {
     bloom_filter bf;
+    bool bf_defined = false;
 
     long long total_num_chars{};
     double seed_fpr;
+    int cutoff;
 
     void calc_metadata(const vector<string>& dataset, const vector<pair<string, string> >& workload, bool do_print)
     {
@@ -44,7 +46,13 @@ class OneBloom: public PointQuery
 
         for(int i = 0;i<(int)dataset.size();i++)
         {
-            total_num_chars+=(int)dataset[i].size()+1;
+            if(cutoff != -1) {
+                total_num_chars += min((int) dataset[i].size() + 1, cutoff);
+            }
+            else
+            {
+                total_num_chars += (int)dataset.size()+1;
+            }
         }
 
         if(do_print) {
@@ -55,25 +63,42 @@ class OneBloom: public PointQuery
 
 public:
 
-    OneBloom(const vector<string>& dataset, const vector<pair<string, string> >& workload, double _seed_fpr, bool do_print = false):
-    seed_fpr(_seed_fpr){
+    OneBloom(const vector<string>& dataset, const vector<pair<string, string> >& workload, double _seed_fpr, int _cutoff, bool do_print = false):
+    seed_fpr(_seed_fpr), cutoff(_cutoff){
         calc_metadata(dataset, workload, do_print);
-        bloom_parameters params = get_bloom_parameters(total_num_chars, seed_fpr);
-        bf = bloom_filter(params);
+        if(total_num_chars > 0) {
+            bloom_parameters params = get_bloom_parameters(total_num_chars, seed_fpr);
+            bf = bloom_filter(params);
+            bf_defined = true;
+        }
     }
 
     void insert(string s) override
     {
-        bf.insert(s);
+        if(cutoff != -1 && (int)s.size() > cutoff)
+        {
+            //assume inserted
+        }
+        else {
+            assert(bf_defined);
+            bf.insert(s);
+        }
     }
 
     bool contains(string s) override
     {
-        return bf.contains(s);
+        if(cutoff != -1 && (int)s.size() > cutoff)
+        {
+            return true;
+        }
+        else {
+            assert(bf_defined);
+            return bf.contains(s);
+        }
     }
 
     unsigned long long get_memory() override{
-        return bf.get_memory() + sizeof(long long) + sizeof(double);
+        return bf.get_memory() + sizeof(long long) + sizeof(double) + sizeof(int);
     }
 
     void clear() override
@@ -83,7 +108,7 @@ public:
 
     PointQueryParams* get_params() override
     {
-        return new OneBloomParams(seed_fpr, -1);
+        return new OneBloomParams(seed_fpr, cutoff);
     }
 
 };
