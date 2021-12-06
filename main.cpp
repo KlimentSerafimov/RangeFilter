@@ -453,7 +453,7 @@ int main() {
     string file_folder = "";
     string file_name = "1M_dataset.txt";
     string workload_difficulty = "easy";
-    string range_filter_type = "one_bloom"; // choose from "surf", "one_bloom", "multi_bloom"
+    string range_filter_type = "multi_bloom"; // choose from "surf", "one_bloom", "multi_bloom"
 
     if(range_filter_type == "surf") {
         main_test_surf(file_folder + file_name);
@@ -508,7 +508,7 @@ int main() {
             pq = new OneBloom(dataset, workload, seed_fprs[seed_fpr_id], do_print);
         }
         else if (range_filter_type == "multi_bloom") {
-            pq = new MultiBloom(dataset, workload, seed_fprs[seed_fpr_id], -1, do_print);
+            pq = new MultiBloom(dataset, workload, seed_fprs[seed_fpr_id], 10, do_print);
         }
         else {
             assert(false);

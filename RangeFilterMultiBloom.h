@@ -181,7 +181,7 @@ public:
     }
     PointQueryParams* get_params() override
     {
-        return new MultiBloomParams(seed_fpr, -1);
+        return new MultiBloomParams(seed_fpr, cutoff);
     }
 };
 
