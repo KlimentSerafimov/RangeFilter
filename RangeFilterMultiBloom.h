@@ -27,7 +27,6 @@ class MultiBloom: public PointQuery
     vector<set<string> > unique_prefixes_per_level;
     vector<int> num_prefixes_per_level;
 
-
     void calc_metadata(const vector<string>& dataset, const vector<pair<string, string> >& workload, bool do_print)
     {
         const int calc_unique_prefixes_lvl = 9;
@@ -77,29 +76,6 @@ class MultiBloom: public PointQuery
                 cout << "num_prefixes_lvl_"<<i <<": " << num_prefixes_per_level[i] << endl;
             }
         }
-    }
-
-    bloom_parameters get_bloom_parameters(int size, double fpr)
-    {
-
-        bloom_parameters parameters;
-
-        parameters.projected_element_count = size;
-
-        parameters.false_positive_probability = fpr;
-
-        parameters.random_seed = 0xA5A5A5A5;
-
-        if (!parameters)
-        {
-            cout << "Error - Invalid set of bloom filter parameters!" << endl;
-            assert(false);
-            return parameters;
-        }
-
-        parameters.compute_optimal_parameters();
-
-        return parameters;
     }
 
     size_t lvl(string s)

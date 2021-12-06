@@ -30,4 +30,5 @@ public:
     }
 };
 
+
 #endif //SURF_POINTQUERY_H

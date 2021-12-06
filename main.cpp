@@ -2,19 +2,18 @@
 #include <string>
 #include <vector>
 #include <fstream>
-#include <assert.h>
-#include <set>
+#include <cassert>
 #include <random>
 #include <cstring>
 
 #include "RangeFilterOneBloom.h"
-
+#include "RangeFilterMultiBloom.h"
+#include "surf/surf_implementation.h"
+#include "Trie.h"
 
 using namespace std;
 
-#include "Trie.h"
 
-#include "RangeFilterMultiBloom.h"
 
 void eval_trie_vs_rf()
 {
@@ -129,16 +128,8 @@ void extract_dataset(string file_path, string dest_path, int num_keys)
 }
 
 
-#include "surf/surf_implementation.h"
-#include "RangeFilterOneBloom.h"
-
-RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<pair<string, string> >& workload, int size, float seed_fpr, Trie* trie)
+RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<pair<string, string> >& workload, int size, float seed_fpr, RangeFilterTemplateTemplate* rf)
 {
-
-    RangeFilterMultiBloom* rf = new RangeFilterMultiBloom(dataset, workload, seed_fpr, true);
-
-//    RangeFilterOneBloom* rf = new RangeFilterOneBloom(dataset, workload, seed_fpr, true);
-
     int num_positive = 0;
     int num_negative = 0;
     int num_false_positives = 0;
@@ -153,10 +144,6 @@ RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<p
         string right_key = workload[i].second;
 
         bool ground_truth = contains(dataset, left_key, right_key);
-        if(trie != nullptr)
-        {
-            assert(trie->query(left_key, right_key) == ground_truth);
-        }
         bool prediction = rf->query(left_key, right_key);
 
         if(ground_truth)
@@ -208,8 +195,6 @@ RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<p
             num_negative,
             (int)rf->get_memory()*8);
 
-    rf->clear();
-//    delete rf;
 
     return ret;
 }
@@ -470,13 +455,17 @@ int main() {
     string file_folder = "";
     string file_name = "1M_dataset.txt";
     string workload_difficulty = "easy";
+    string range_filter_type = "multi_bloom"; // choose from "surf", "one_bloom", "multi_bloom"
+
+    if(range_filter_type == "surf") {
+        main_test_surf(file_folder + file_name);
+        return 0;
+    }
 
 //    eval_trie_vs_rf();
 //    return 0;
 
 //    test_bloom_filter();
-//    return 0;
-//    main_test_surf(file_folder+file_name);
 //    return 0;
 
 //    string file_folder = "/home/kliment/Downloads/";
@@ -494,9 +483,6 @@ int main() {
 
     ofstream output_file("results.out");
 
-//    int init_size = num_bf_inserts/4;
-//    for(int size = init_size; size<=num_bf_inserts;size*=sqrt(2))
-//    {
         const int num_seed_fprs = 15;
         float seed_fprs[num_seed_fprs] = {
                 0.00001,
@@ -512,33 +498,29 @@ int main() {
                 0.5,
                 0.6,
                 0.7,
-//                0.75,
                 0.8,
-//                0.85,
                 0.9,
-//                0.95,
-//                0.97
-//                0.92,
-//                0.94,
-//                0.96,
-//                0.98,
-//                0.99,
-//                0.995,
-//                0.999,
-//                0.9995,
-//                0.9999,
-//                0.99995,
-//                0.99999,
-//                0.999995,
         };
         for(int seed_fpr_id = 0; seed_fpr_id < num_seed_fprs; seed_fpr_id++) {
-            RangeFilterStats ret = test_range_filter(dataset, workload, -1, seed_fprs[seed_fpr_id], nullptr);
+            RangeFilterTemplateTemplate* rf;
+            if(range_filter_type == "one_bloom")
+            {
+                rf = new RangeFilterTemplate<OneBloom>(
+                        dataset, workload, seed_fprs[seed_fpr_id], true);
+            }
+            else if (range_filter_type == "multi_bloom")
+                rf = new RangeFilterTemplate<MultiBloom>(
+                        dataset, workload, seed_fprs[seed_fpr_id], true);
+            else {
+                assert(false);
+            }
+            RangeFilterStats ret = test_range_filter(dataset, workload, -1, seed_fprs[seed_fpr_id], rf);
+            rf->clear();
             output_file << ret.to_string() << endl;
             cout << ret.to_string() << endl;
         }
         output_file << endl;
         cout << endl;
-//    }
 
     output_file.close();
 

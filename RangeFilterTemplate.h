@@ -13,9 +13,26 @@
 
 using namespace std;
 
+class RangeFilterTemplateTemplate
+{
+public:
+    virtual bool query(string left, string right)
+    {
+        assert(false);
+    }
+
+    virtual unsigned long long get_memory() {
+        assert(false);
+    }
+
+    virtual void clear()
+    {
+        assert(false);
+    }
+};
 
 template<typename PointQuery>
-class RangeFilterTemplate
+class RangeFilterTemplate: public RangeFilterTemplateTemplate
 {
     PointQuery pq;
     char last_char{};
@@ -23,8 +40,6 @@ class RangeFilterTemplate
     char is_leaf_char{};
     int max_length{};
     long long total_num_chars{};
-
-public:
 
     void calc_metadata(const vector<string>& dataset, const vector<pair<string, string> >& workload, bool do_print)
     {
@@ -65,6 +80,8 @@ public:
             }
         }
 
+        assert(init_char <= last_char);
+
         int num_unique_chars = 0;
         for(int i = 0;i<127;i++)
         {
@@ -92,14 +109,6 @@ public:
     {
         return pq.contains(s);
     }
-
-    RangeFilterTemplate(const vector<string>& dataset, const vector<pair<string, string> >& workload, double fpr, bool do_print = false)
-    {
-        calc_metadata(dataset, workload, do_print);
-        pq = PointQuery(dataset, workload, fpr, do_print);
-        insert_prefixes(dataset);
-    }
-
     void insert_prefixes(const vector<string>& dataset){
         long long num_inserted = 0;
         for (size_t i = 0; i < dataset.size(); ++i) {
@@ -124,13 +133,6 @@ public:
                 cout << "inserted(strings) " << i+1 << "/" << dataset.size() << endl;
             }
         }
-    }
-
-    RangeFilterTemplate(const vector<string>& dataset, const vector<pair<string, string> >& workload, vector<pair<int, double> > params, bool do_print = false)
-    {
-        calc_metadata(dataset, workload, do_print);
-        pq = PointQuery(dataset, workload, params, do_print);
-        insert_prefixes(dataset);
     }
 
     bool str_invariant(string q)
@@ -162,7 +164,24 @@ public:
 //        cout << "ret" << endl;
     }
 
-    bool query(string left, string right)
+public:
+
+    RangeFilterTemplate(const vector<string>& dataset, const vector<pair<string, string> >& workload, double fpr, bool do_print = false)
+    {
+        calc_metadata(dataset, workload, do_print);
+        pq = PointQuery(dataset, workload, fpr, do_print);
+        insert_prefixes(dataset);
+    }
+
+    RangeFilterTemplate(const vector<string>& dataset, const vector<pair<string, string> >& workload, vector<pair<int, double> > params, bool do_print = false)
+    {
+        calc_metadata(dataset, workload, do_print);
+        pq = PointQuery(dataset, workload, params, do_print);
+        insert_prefixes(dataset);
+    }
+
+
+    bool query(string left, string right) override
     {
         assert(str_invariant(left));
         assert(str_invariant(right));
@@ -338,25 +357,13 @@ public:
     }
 
 
-    unsigned long long get_memory() {
+    unsigned long long get_memory() override {
         return pq.get_memory() + 3*sizeof(char) + sizeof(int) + sizeof(long long);
-
-//        unsigned long long ret = 0;
-//        for(size_t i = 0;i<bfs.size();i++)
-//        {
-//            ret+=bfs[i].get_memory();
-//        }
-//        return ret + sizeof(bloom_filter);
     }
 
-    void clear()
+    void clear() override
     {
         pq.clear();
-//        for(size_t i = 0; i<bfs.size();i++)
-//        {
-//            bfs[i].clear_memory();
-//        }
-//        bfs.clear();
     }
 };
 

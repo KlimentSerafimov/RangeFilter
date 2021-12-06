@@ -737,6 +737,12 @@ private:
    std::vector<unsigned long long int> size_list;
 };
 
+#include <iostream>
+#include <cassert>
+
+bloom_parameters get_bloom_parameters(long long size, double fpr);
+
+
 #endif
 
 
