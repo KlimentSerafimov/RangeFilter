@@ -257,6 +257,12 @@ public:
       inserted_element_count_ = 0;
    }
 
+   void clear_memory()
+   {
+       salt_.clear();
+       bit_table_.clear();
+   }
+
    inline void insert(const unsigned char* key_begin, const std::size_t& length)
    {
       std::size_t bit_index = 0;
