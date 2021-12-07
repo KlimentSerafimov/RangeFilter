@@ -437,11 +437,11 @@ int prep_dataset_and_workload(const string& file_path, string workload_difficult
     return num_bf_inserts;
 }
 
-int main_test_surf(const string& file_path)
+int main_test_surf(const string& file_path, string workload_difficulty)
 {
-    prep_dataset_and_workload(file_path, "easy");
+    prep_dataset_and_workload(file_path, workload_difficulty);
 
-    for(int trie_size = 2; trie_size <= 30; trie_size+=2) {
+    for(int trie_size = 1; trie_size <= 30; trie_size+=1) {
         SurfStats surf_ret = test_surf(dataset, workload, trie_size);
 
         cout << surf_ret.to_string() << endl;
@@ -456,15 +456,15 @@ void simulated_annealing(ofstream& output_file);
 int main() {
 
 
-    string file_folder = "";
-    string file_name = "1M_dataset.txt";
-    string workload_difficulty = "medium";
+    string file_folder;
+    string file_name = "50k_dataset.txt";
+    string workload_difficulty = "easy";
     string range_filter_type = "multi_bloom"; // choose from "surf", "one_bloom", "multi_bloom"
     string parameter_search_style = "simulated_annealing"; // choose from "grid_search", "simulated_annealing"
 
     if (range_filter_type == "surf") {
         assert(parameter_search_style == "grid_search");
-        main_test_surf(file_folder + file_name);
+        main_test_surf(file_folder + file_name, workload_difficulty);
         return 0;
     }
 
@@ -482,7 +482,7 @@ int main() {
 
     bool do_extract_dataset = false;
     if (do_extract_dataset) {
-        extract_dataset(file_path, "1M_dataset.txt", 1000000);
+        extract_dataset(file_path, "50k_dataset.txt", 50000);
         return 0;
     }
 
@@ -507,11 +507,15 @@ int main() {
 
 void simulated_annealing(ofstream& output_file)
 {
-    double seed_fpr = 0.01;
-    int seed_cutoff = 12;
+    double seed_fpr = 0.4;
+    int seed_cutoff = 15;
     bool do_print = false;
 
-    int output_frontier_every = 10;
+    vector<string> dim_names;
+    dim_names.emplace_back("bpk");
+    dim_names.emplace_back("fpr");
+
+    int output_frontier_every = 100;
 
     Frontier<RichMultiBloomParams> frontier(2);
 
@@ -521,27 +525,37 @@ void simulated_annealing(ofstream& output_file)
 
     RangeFilterStats ret = test_range_filter(dataset, workload, rf, do_print);
 
-    assert(frontier.insert(*((RichMultiBloomParams*)ret.get_params()), ret.to_vector()));
+    size_t annealing_epoch = 0;
+    size_t iter = 1;
+    assert(frontier.insert(*(((RichMultiBloomParams *) ret.get_params())->add_iter_and_epoch(iter, annealing_epoch)), ret.to_vector()));
 
+    cout << endl;
     cout << ret.to_string() << endl;
+    output_file << ret.to_string() << endl;
 
     ofstream frontiers("frontiers.out");
 
-    int iter = 1;
-    int total_num_inserts = 1;
+    annealing_epoch+=1;
 
-    int stagnation_count = 0;
-    int max_stagnation = 0;
+    size_t total_num_inserts = 1;
+
+    size_t success_count = 0;
+    size_t explore_more_success_count_threshold = 2;
+
+    size_t stagnation_count = 0;
+
+    const size_t stagnation_count_cutoff_for_annealing_epoch_transition = 2; //seed_cutoff*4;
+    const size_t max_reinitialization_count = 1;
 
     while(true)
     {
         iter+=1;
 
         int dim_id = rand() % seed_cutoff;
-        double mult = 0.5;
+        double mult = pow(0.5, 1.0/(double)annealing_epoch);
         if(rand()%2 == 0)
         {
-            mult = 2.0;
+            mult = pow(2.0, 1.0/(double)annealing_epoch);
         }
 
         pq->perturb(dim_id, mult, rf->get_is_leaf_char());
@@ -551,8 +565,11 @@ void simulated_annealing(ofstream& output_file)
         cout << endl;
         cout << "ITER " << iter << endl;
         output_file << "ITER " << iter << endl;
-        if(frontier.insert(*((RichMultiBloomParams*)ret.get_params()), ret.to_vector()))
+        cout << "EPOCH " << annealing_epoch << endl;
+        output_file << "EPOCH " << annealing_epoch << endl;
+        if(frontier.insert(*(((RichMultiBloomParams *) ret.get_params())->add_iter_and_epoch(iter, annealing_epoch)), ret.to_vector()))
         {
+            success_count+=1;
             total_num_inserts+=1;
             stagnation_count = 0;
 
@@ -563,37 +580,145 @@ void simulated_annealing(ofstream& output_file)
             output_file << "|frontier| = " << frontier.get_size() << endl;
             cout << "|inserts| = " << total_num_inserts << endl;
             output_file << "|inserts| = " << total_num_inserts << endl;
+            cout << "|betterment| = " << success_count << endl;
+            output_file << "|betterment| = " << success_count << endl;
+
         }
         else
         {
             stagnation_count+=1;
-            max_stagnation = max(max_stagnation, stagnation_count);
-            cout << "UNDO" << endl << "|stagnation| " << stagnation_count << endl << "|max_stagnation| " << max_stagnation << endl;
-            output_file << "UNDO" << endl << "|stagnation| " << stagnation_count << endl << "|max_stagnation| " << max_stagnation << endl;
+            success_count = 0;
+            cout << "UNDO" << endl << "|stagnation| " << stagnation_count << endl;
+            output_file << "UNDO" << endl << "|stagnation| " << stagnation_count << endl;
             pq->undo();
+
         }
 
-        cout << ret.to_string() << endl << endl;
-        output_file << ret.to_string() << endl << endl;
+        cout << ret.to_string() << endl;
+        output_file << ret.to_string() << endl;
 
-        if(iter % output_frontier_every == 0)
+        if(success_count >= explore_more_success_count_threshold && annealing_epoch >= 2)
+        {
+            cout << endl;
+            output_file << endl;
+            cout << "EXPLORE MORE" << endl;
+            output_file << "EXPLORE MORE" << endl;
+            assert(annealing_epoch >= 2);
+            annealing_epoch = annealing_epoch-1;
+            cout << "NEW EPOCH " << annealing_epoch << endl;
+            output_file << "NEW EPOCH " << annealing_epoch << endl;
+            success_count = 0;
+        }
+
+        bool break_asap = false;
+        if(stagnation_count >= stagnation_count_cutoff_for_annealing_epoch_transition)
+        {
+            cout << endl;
+            output_file << endl;
+
+            vector<FrontierPoint<RichMultiBloomParams> >& vec = frontier.get_frontier_to_modify();
+            pair<size_t, int> oldest_params = make_pair(iter, -1);
+
+            for(size_t reinitialization_count = 0;
+                reinitialization_count <= max_reinitialization_count && oldest_params.second == -1;
+                reinitialization_count++) {
+                if(reinitialization_count >= 1)
+                {
+                    cout << "REINITIALIZATION_COUNT " << reinitialization_count << endl;
+                    output_file << "REINITIALIZATION_COUNT " << reinitialization_count << endl;
+                    cout << "MAX_REINITIALIZATION_COUNT " << max_reinitialization_count << endl;
+                    output_file << "MAX_REINITIALIZATION_COUNT " << max_reinitialization_count << endl;
+                }
+                for (size_t i = 0; i < vec.size(); i++) {
+                    if (vec[i].get_params().get_used_for_reinit_count() <= reinitialization_count) {
+                        oldest_params = min(oldest_params, make_pair(vec[i].get_params().get_iter_id(), (int) i));
+                    }
+                }
+            }
+
+            if(oldest_params.second == -1)
+            {
+                cout << "BREAK ASAP" << endl;
+                output_file << "BREAK ASAP" << endl;
+                break_asap = true;
+            }
+            else {
+
+                assert(oldest_params.second != -1);
+
+                cout << "REINITIALIZE TO" << endl;
+                output_file << "REINITIALIZE TO" << endl;
+
+                cout << vec[oldest_params.second].to_string(dim_names) << endl;
+                output_file << vec[oldest_params.second].to_string(dim_names) << endl;
+
+                pq->reinitialize(vec[oldest_params.second].get_params());
+                rf->insert_prefixes(dataset);
+
+                RichMultiBloomParams &params = vec[oldest_params.second].get_params_to_modify();
+                params.used_for_reinit();
+
+                annealing_epoch = params.get_epoch();
+
+                cout << "NEW EPOCH " << annealing_epoch << endl;
+                output_file << "NEW EPOCH " << annealing_epoch << endl;
+
+                stagnation_count = 0;
+                success_count = 0;
+            }
+        }
+
+        if(iter % output_frontier_every == 0 || break_asap)
         {
             const vector<FrontierPoint<RichMultiBloomParams> >& vec = frontier.get_frontier();
 
             frontiers << "ITER " << iter << endl;
+            frontiers << "EPOCH " << annealing_epoch << endl;
             frontiers << "|inserts| = " << total_num_inserts << endl;
-            frontiers << "|stagnation| " << stagnation_count << endl;
-            frontiers << "|max_stagnation| " << max_stagnation << endl;
+            frontiers << "|betterment| = " << success_count << endl;
+            frontiers << "|stagnation| = " << stagnation_count << endl;
             frontiers << "|frontier| = " << frontier.get_size() << endl;
+
+            vector<size_t> reinit_counts;
+            for(size_t i = 0; i <= max_reinitialization_count+1; i++)
+            {
+                reinit_counts.push_back(0);
+            }
+
             for(size_t i = 0;i<vec.size();i++)
             {
-                frontiers << vec[i].to_string() << endl;
+                size_t reinit_count = vec[i].get_params().get_used_for_reinit_count();
+                assert(reinit_count <= reinit_counts.size());
+                reinit_counts[reinit_count]+=1;
+            }
+
+            for(size_t i = 0; i <= max_reinitialization_count+1; i++)
+            {
+                if(reinit_counts[i] >= 1) {
+                    frontiers << "|reinit_counts = " << i << "| = " << reinit_counts[i] << endl;
+                }
+            }
+
+
+            for(size_t i = 0;i<vec.size();i++)
+            {
+                frontiers << vec[i].to_string(dim_names) << endl;
             }
 
             frontiers << endl;
+
+            if(break_asap)
+            {
+                cout << endl;
+                output_file << endl;
+                cout << "BREAK" << endl;
+                output_file << "BREAK" << endl;
+            }
         }
     }
 
+    cout << "DONE" << endl;
+    output_file << "DONE" << endl;
 }
 
 void grid_search(const string& range_filter_type, ofstream& output_file){

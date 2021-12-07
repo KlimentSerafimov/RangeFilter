@@ -72,13 +72,13 @@ public:
 
     string to_string() const {
         string ret;
-        ret += "BPK\t"+std::to_string(bits_per_key())+"\tFPR(%)\t"+std::to_string(false_positive_rate())+"\tPARAMS\t"+params->to_string();
+        ret += "SCORE\tbpk "+std::to_string(bits_per_key())+" fpr "+std::to_string(false_positive_rate())+"\t"+params->to_string();
         return ret;
     }
 
     double false_positive_rate() const
     {
-        return (double)num_false_positives/num_negatives*100.0;
+        return (double)num_false_positives/num_negatives;
     }
 
     double bits_per_key() const

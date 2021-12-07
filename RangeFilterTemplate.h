@@ -92,32 +92,6 @@ class RangeFilterTemplate
     {
         return pq->contains(std::move(s));
     }
-    void insert_prefixes(const vector<string>& dataset){
-        long long num_inserted = 0;
-        for (size_t i = 0; i < dataset.size(); ++i) {
-            string prefix;
-            for(size_t j = 0;j<dataset[i].size();j++) {
-                prefix+=dataset[i][j];
-                pq->insert(prefix);
-
-                num_inserted += 1;
-                if ((num_inserted) % 100000000 == 0) {
-                    cout << "inserted(chars) " << num_inserted << "/" << total_num_chars << endl;
-                }
-            }
-            prefix+=is_leaf_char;
-            pq->insert(prefix);
-
-            num_inserted += 1;
-            if ((num_inserted) % 100000000 == 0) {
-                cout << "inserted(chars) " << num_inserted << "/" << total_num_chars << endl;
-            }
-            if ((i+1) % 10000000 == 0) {
-                cout << "inserted(strings) " << i+1 << "/" << dataset.size() << endl;
-            }
-        }
-    }
-
     bool str_invariant(string q) const
     {
         bool ret = true;
@@ -148,6 +122,32 @@ class RangeFilterTemplate
     }
 
 public:
+
+    void insert_prefixes(const vector<string>& dataset){
+        long long num_inserted = 0;
+        for (size_t i = 0; i < dataset.size(); ++i) {
+            string prefix;
+            for(size_t j = 0;j<dataset[i].size();j++) {
+                prefix+=dataset[i][j];
+                pq->insert(prefix);
+
+                num_inserted += 1;
+                if ((num_inserted) % 100000000 == 0) {
+                    cout << "inserted(chars) " << num_inserted << "/" << total_num_chars << endl;
+                }
+            }
+            prefix+=is_leaf_char;
+            pq->insert(prefix);
+
+            num_inserted += 1;
+            if ((num_inserted) % 100000000 == 0) {
+                cout << "inserted(chars) " << num_inserted << "/" << total_num_chars << endl;
+            }
+            if ((i+1) % 10000000 == 0) {
+                cout << "inserted(strings) " << i+1 << "/" << dataset.size() << endl;
+            }
+        }
+    }
 
     RangeFilterTemplate(const vector<string>& dataset, const vector<pair<string, string> >& workload, PointQuery* _pq, bool do_print = false):
     pq(_pq)

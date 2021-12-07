@@ -67,15 +67,16 @@ public:
         return score;
     }
 
-    string to_string() const
+    string to_string(const vector<string>& dim_names) const
     {
         assert(!is_erased());
+        assert(dim_names.size() == score.size());
         string ret = "SCORE\t";
         for(size_t i = 0;i<score.size();i++)
         {
-            ret+=std::to_string(score[i])+" ";
+            ret+=dim_names[i]+" "+std::to_string(score[i])+" ";
         }
-        ret += "\tPARAMS\t" + params.to_string();
+        ret += "\t" + params.to_string();
         return ret;
     }
 
@@ -94,6 +95,14 @@ public:
             }
         }
         return false;
+    }
+
+    const ParamsType& get_params() const {
+        return params;
+    }
+
+    ParamsType& get_params_to_modify() {
+        return params;
     }
 
 };
@@ -263,7 +272,12 @@ public:
         return frontier;
     }
 
- };
+    vector<FrontierPoint<ParamsType> >& get_frontier_to_modify() {
+        remove_erased();
+        sort(frontier.begin(), frontier.end());
+        return frontier;
+    }
+};
 
 
 

@@ -101,24 +101,20 @@ protected:
         return s.size()-1;
     }
 
-private:
-
     void init()
     {
-        assert(!params.empty());
         vector<bloom_filter> parameters = vector<bloom_filter>();
-        vector<int> num_inserts_per_level;
         bfs = vector<bloom_filter>();
         size_t max_lvl = params.size();
         if(cutoff != -1)
         {
             assert(max_lvl == (size_t)cutoff);
         }
+        assert(bfs.empty());
         for(size_t i = 0;i<max_lvl;i++)
         {
             parameters.emplace_back(get_bloom_parameters(params[i].first, params[i].second));
             bfs.emplace_back(bloom_filter(parameters[i]));
-            num_inserts_per_level.emplace_back(0);
         }
     }
 
@@ -168,6 +164,7 @@ public:
                 cout << "NOT ENOUGH BLOOM FILTERS!" << endl;
                 assert(false);
             } else {
+                if(bfs[lvl(s)].size())
                 bfs[lvl(s)].insert(s);
             }
         }
@@ -199,20 +196,55 @@ public:
 
 class RichMultiBloomParams: public PointQueryParams
 {
-    vector<pair<int, double> > fprs;
+    vector<pair<int, double> > params;
 public:
-    explicit RichMultiBloomParams(vector<pair<int, double> > _fprs): fprs(std::move(_fprs)){}
+    explicit RichMultiBloomParams(vector<pair<int, double> > _fprs): params(std::move(_fprs)){}
 
     string to_string() const override
     {
         string ret;
-        for(size_t i = 0;i<fprs.size();i++)
+        ret = "METAPARAMS\titer " + std::to_string(iter_id)+" epoch "+std::to_string(epoch_id) + " reinit " + std::to_string(used_for_reinit_count);
+        ret += "\tPARAMS\t";
+        for(size_t i = 0; i < params.size(); i++)
         {
-            ret += "lvl" + std::to_string(i) + "(keys: " + std::to_string(fprs[i].first) + ", fpr: " + std::to_string(fprs[i].second) + ") ";
+            ret += "lvl" + std::to_string(i) + "(keys " + std::to_string(params[i].first) + ", fpr " + std::to_string(params[i].second) + ") ";
         }
         return ret;
     }
 
+    const vector<pair<int, double> >& get_params() const
+    {
+        return params;
+    };
+
+private:
+    size_t iter_id{};
+    size_t epoch_id{};
+    size_t used_for_reinit_count = 0;
+public:
+
+    RichMultiBloomParams *add_iter_and_epoch(size_t _iter_id, size_t _epoch_id) {
+        iter_id = _iter_id;
+        epoch_id = _epoch_id;
+        return this;
+    }
+
+    const size_t &get_iter_id() const {
+        return iter_id;
+    }
+
+    void used_for_reinit() {
+        used_for_reinit_count+=1;
+        epoch_id+=1;
+    }
+
+    size_t get_used_for_reinit_count() const {
+        return used_for_reinit_count;
+    }
+
+    size_t get_epoch() const {
+        return epoch_id;
+    }
 };
 
 class RichMultiBloom: public MultiBloom {
@@ -221,7 +253,7 @@ class RichMultiBloom: public MultiBloom {
     bool has_prev = false;
     size_t prev_changed_dim_id{};
     double prev_fpr_at_prev_changed_dim_id{};
-    char prev_is_leaf_char;
+    char prev_is_leaf_char{};
 
 
 public:
@@ -236,7 +268,12 @@ public:
         return new RichMultiBloomParams(params);
     }
 
-
+    void reinitialize(const RichMultiBloomParams& new_params)
+    {
+        params = new_params.get_params();
+        clear();
+        init();
+    }
 
     void perturb(size_t dim_id, double mult, char is_leaf_char) {
         assert(cutoff >= 0);

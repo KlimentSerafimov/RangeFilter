@@ -272,7 +272,15 @@ public:
       {
          compute_indices(hash_ap(key_begin, length, salt_[i]), bit_index, bit);
 
-         bit_table_[bit_index / bits_per_char] |= bit_mask[bit];
+         size_t index = bit_index / bits_per_char;
+
+         if(index >= bit_table_.size())
+         {
+
+         }
+         else {
+             bit_table_[index] |= bit_mask[bit];
+         }
       }
 
       ++inserted_element_count_;
@@ -315,9 +323,12 @@ public:
       {
          compute_indices(hash_ap(key_begin, length, salt_[i]), bit_index, bit);
 
-         if ((bit_table_[bit_index / bits_per_char] & bit_mask[bit]) != bit_mask[bit])
-         {
-            return false;
+         size_t index = bit_index / bits_per_char;
+
+         if(index < bit_table_.size()) {
+             if ((bit_table_[index] & bit_mask[bit]) != bit_mask[bit]) {
+                 return false;
+             }
          }
       }
 
