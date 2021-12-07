@@ -170,6 +170,11 @@ RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<p
                 true_negatives += 1;
             }
         }
+
+        if((i+1)%1000000 == 0)
+        {
+            cout << "tested " << i+1 << "/" << workload.size() << endl;
+        }
     }
 
     assert(num_false_negatives == 0);
@@ -372,44 +377,59 @@ int prep_dataset_and_workload(const string& file_path, string workload_difficult
     cout << "done sorting"<< endl;
 
 
-    for(size_t i = 0;i<workload_seed.size()-1;i++)
+    if(workload_difficulty == "easy" || workload_difficulty == "medium" || workload_difficulty == "hard") {
+        for (size_t i = 0; i < workload_seed.size() - 1; i++) {
+            if (workload_difficulty == "easy") {
+                //eeasy workload
+                string left_key = workload_seed[i];
+                string right_key = left_key;
+                right_key[(int) right_key.size() - 1] += (char) 1;
+                workload.emplace_back(make_pair(left_key, right_key));
+            } else if (workload_difficulty == "medium") {
+                //medium workload
+                string left_key = workload_seed[i];
+                string right_key = left_key;
+                right_key[(int) right_key.size() / 4] += (char) 1;
+
+                workload.emplace_back(make_pair(left_key, right_key));
+            } else if (workload_difficulty == "hard") {
+                //hard workload
+                string left_key = workload_seed[i];
+                string right_key = workload_seed[i + 1];
+                left_key += init_char;
+                right_key[right_key.size() - 1] -= 1;
+
+                workload.emplace_back(make_pair(left_key, right_key));
+            }else {
+                assert(false);
+            }
+            if ((i + 1) % 10000000 == 0) {
+                cout << "num_workloads converted " << i + 1 << endl;
+            }
+        }
+    }
+    else if (workload_difficulty == "impossible")
     {
-        if(workload_difficulty == "easy") {
-            //eeasy workload
-            string left_key = workload_seed[i];
-            string right_key = left_key;
-            right_key[(int)right_key.size()-1]+=(char)1;
-            workload.emplace_back(make_pair(left_key, right_key));
-        }
-        else if (workload_difficulty == "medium")
-        {
-            //medium workload
-            string left_key = workload_seed[i];
-            string right_key = left_key;
-            right_key[(int)right_key.size()/4]+=(char)1;
+        for (size_t i = 0; i < dataset.size() - 1; i++) {
+            if (workload_difficulty == "impossible") {
+                //hard workload
+                string left_key = dataset[i];
+                string right_key = dataset[i + 1];
+                left_key += init_char;
+                right_key[right_key.size() - 1] -= 1;
 
-            workload.emplace_back(make_pair(left_key, right_key));
+                workload.emplace_back(make_pair(left_key, right_key));
+            } else {
+                assert(false);
+            }
+            if ((i + 1) % 10000000 == 0) {
+                cout << "num_workloads converted " << i + 1 << endl;
+            }
         }
-        else if(workload_difficulty == "hard") {
-            //hard workload
-            string left_key = workload_seed[i];
-            string right_key = workload_seed[i + 1];
-            left_key += init_char;
-            right_key[right_key.size() - 1] -= 1;
-
-            workload.emplace_back(make_pair(left_key, right_key));
-        }
-        else
-        {
-    assert(false);
-        }
-
-
-        if((i+1)%10000000 == 0)
-        {
-            cout << "num_workloads converted " << i+1 << endl;
-        }
-
+    }
+    else
+    {
+        assert(false);
     }
 
     cout << "workload size " << workload_seed.size() << endl;
@@ -458,7 +478,7 @@ int main() {
 
     string file_folder;
     string file_name = "50k_dataset.txt";
-    string workload_difficulty = "easy";
+    string workload_difficulty = "hard"; //choose from "easy", "medium", "hard", "impossible"
     string range_filter_type = "multi_bloom"; // choose from "surf", "one_bloom", "multi_bloom"
     string parameter_search_style = "simulated_annealing"; // choose from "grid_search", "simulated_annealing"
 
@@ -507,8 +527,8 @@ int main() {
 
 void simulated_annealing(ofstream& output_file)
 {
-    double seed_fpr = 0.4;
-    int seed_cutoff = 15;
+    double seed_fpr = 0.005;
+    int seed_cutoff = 9;
     bool do_print = false;
 
     vector<string> dim_names;
@@ -540,11 +560,11 @@ void simulated_annealing(ofstream& output_file)
     size_t total_num_inserts = 1;
 
     size_t success_count = 0;
-    size_t explore_more_success_count_threshold = 2;
+    size_t explore_more_success_count_threshold = 3;
 
     size_t stagnation_count = 0;
 
-    const size_t stagnation_count_cutoff_for_annealing_epoch_transition = 2; //seed_cutoff*4;
+    const size_t stagnation_count_cutoff_for_annealing_epoch_transition = 3; //seed_cutoff*4;
     const size_t max_reinitialization_count = 1;
 
     while(true)
@@ -563,6 +583,7 @@ void simulated_annealing(ofstream& output_file)
         RangeFilterStats ret = test_range_filter(dataset, workload, rf, do_print);
 
         cout << endl;
+        output_file << endl;
         cout << "ITER " << iter << endl;
         output_file << "ITER " << iter << endl;
         cout << "EPOCH " << annealing_epoch << endl;
@@ -723,11 +744,13 @@ void simulated_annealing(ofstream& output_file)
 
 void grid_search(const string& range_filter_type, ofstream& output_file){
 
-    for(int cutoff = 0; cutoff < 20; cutoff++) {
+    for(int cutoff = -1; cutoff < 20; cutoff++) {
 
         const int num_seed_fprs = 10;
         float seed_fprs[num_seed_fprs] = {
-//                0.00001,
+                0.0000001,
+                0.000001,
+                0.00001,
                 0.0001,
                 0.001,
                 0.005,
@@ -735,9 +758,9 @@ void grid_search(const string& range_filter_type, ofstream& output_file){
                 0.05,
                 0.1,
                 0.2,
-                0.3,
-                0.4,
-                0.5,
+//                0.3,
+//                0.4,
+//                0.5,
 //                0.6,
 //                0.7,
 //                0.8,
@@ -758,7 +781,7 @@ void grid_search(const string& range_filter_type, ofstream& output_file){
             rf->clear();
             output_file << ret.to_string() << endl;
             cout << ret.to_string() << endl;
-            if(ret.false_positive_rate() > 50)
+            if(ret.false_positive_rate() > 0.5)
             {
                 output_file << "fpr too large; break;" << endl;
                 cout << "fpr too large; break;" << endl;

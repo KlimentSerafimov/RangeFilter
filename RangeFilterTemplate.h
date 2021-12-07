@@ -132,7 +132,7 @@ public:
                 pq->insert(prefix);
 
                 num_inserted += 1;
-                if ((num_inserted) % 100000000 == 0) {
+                if ((num_inserted) % 1000000 == 0) {
                     cout << "inserted(chars) " << num_inserted << "/" << total_num_chars << endl;
                 }
             }
@@ -140,10 +140,10 @@ public:
             pq->insert(prefix);
 
             num_inserted += 1;
-            if ((num_inserted) % 100000000 == 0) {
+            if ((num_inserted) % 1000000 == 0) {
                 cout << "inserted(chars) " << num_inserted << "/" << total_num_chars << endl;
             }
-            if ((i+1) % 10000000 == 0) {
+            if ((i+1) % 100000 == 0) {
                 cout << "inserted(strings) " << i+1 << "/" << dataset.size() << endl;
             }
         }
