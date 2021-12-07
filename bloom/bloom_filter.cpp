@@ -17,9 +17,9 @@ bloom_parameters get_bloom_parameters(long long size, double fpr)
 
     if (!parameters)
     {
-    std::cout << "Error - Invalid set of bloom filter parameters!" << std::endl;
-    assert(false);
-    return parameters;
+        std::cout << "Error - Invalid set of bloom filter parameters!" << std::endl;
+        assert(false);
+        return parameters;
     }
 
     parameters.compute_optimal_parameters();

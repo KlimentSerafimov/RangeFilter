@@ -22,7 +22,7 @@ class OneBloomParams: public PointQueryParams
     int cutoff;
 public:
     OneBloomParams(double _seed_fpr, int _cutoff):  seed_fpr(_seed_fpr), cutoff(_cutoff) {}
-    string to_string() override
+    string to_string() const override
     {
         return "seed_fpr\t" + std::to_string(seed_fpr) + "\tcutoff\t" + std::to_string(cutoff);
     }

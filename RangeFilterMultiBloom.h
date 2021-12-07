@@ -24,7 +24,7 @@ class MultiBloomParams: public PointQueryParams
     int cutoff;
 public:
     MultiBloomParams(double _seed_fpr, int _cutoff): seed_fpr(_seed_fpr), cutoff(_cutoff) {}
-    string to_string() override
+    string to_string() const override
     {
         return "seed_fpr\t" + std::to_string(seed_fpr) + "\tcutoff\t" + std::to_string(cutoff);
     }
@@ -32,13 +32,17 @@ public:
 
 class MultiBloom: public PointQuery
 {
-    vector<bloom_filter> bfs;
 
     int max_length{};
     vector<set<string> > unique_prefixes_per_level;
     vector<int> num_prefixes_per_level;
-    int cutoff{};
     double seed_fpr{};
+
+protected:
+    vector<bloom_filter> bfs;
+    int cutoff{};
+    vector<pair<int, double> > params;
+private:
 
     void calc_metadata(const vector<string>& dataset, const vector<pair<string, string> >& workload, bool do_print)
     {
@@ -91,20 +95,24 @@ class MultiBloom: public PointQuery
         }
     }
 
+protected:
     size_t lvl(string s)
     {
         return s.size()-1;
     }
 
-    void init(const vector<pair<int, double> >& params)
+private:
+
+    void init()
     {
+        assert(!params.empty());
         vector<bloom_filter> parameters = vector<bloom_filter>();
         vector<int> num_inserts_per_level;
         bfs = vector<bloom_filter>();
         size_t max_lvl = params.size();
         if(cutoff != -1)
         {
-            max_lvl = (size_t)cutoff;
+            assert(max_lvl == (size_t)cutoff);
         }
         for(size_t i = 0;i<max_lvl;i++)
         {
@@ -119,15 +127,18 @@ public:
     MultiBloom()= default;
 
     MultiBloom(const vector<string>& dataset, const vector<pair<string, string> >& workload, double _seed_fpr, int _cutoff = -1, bool do_print = false):
-    cutoff(_cutoff), seed_fpr(_seed_fpr){
+    seed_fpr(_seed_fpr), cutoff(_cutoff){
         calc_metadata(dataset, workload, do_print);
-
-        vector<pair<int, double> > params;
-        for(size_t i = 0;i<num_prefixes_per_level.size();i++){
+        size_t max_lvl = num_prefixes_per_level.size();
+        if(cutoff != -1)
+        {
+            max_lvl = (size_t)cutoff;
+        }
+        for(size_t i = 0;i<max_lvl;i++){
             params.emplace_back(num_prefixes_per_level[i], seed_fpr);
         }
 
-        init(params);
+        init();
     }
 
     bool contains(string s) override
@@ -168,7 +179,8 @@ public:
         {
             ret+=bfs[i].get_memory();
         }
-        return ret + sizeof(vector<bloom_filter>) + 2*sizeof(int) + sizeof(vector<set<string> >) + sizeof(vector<int>) + sizeof(double);
+        return ret + sizeof(vector<bloom_filter>) + 2*sizeof(int) + sizeof(vector<set<string> >) + sizeof(vector<int>) + sizeof(double) +
+        sizeof(vector<pair<int, double> >) + params.size()*sizeof(pair<int, double>);
     }
 
     void clear() override
@@ -182,6 +194,123 @@ public:
     PointQueryParams* get_params() override
     {
         return new MultiBloomParams(seed_fpr, cutoff);
+    }
+};
+
+class RichMultiBloomParams: public PointQueryParams
+{
+    vector<pair<int, double> > fprs;
+public:
+    explicit RichMultiBloomParams(vector<pair<int, double> > _fprs): fprs(std::move(_fprs)){}
+
+    string to_string() const override
+    {
+        string ret;
+        for(size_t i = 0;i<fprs.size();i++)
+        {
+            ret += "lvl" + std::to_string(i) + "(keys: " + std::to_string(fprs[i].first) + ", fpr: " + std::to_string(fprs[i].second) + ") ";
+        }
+        return ret;
+    }
+
+};
+
+class RichMultiBloom: public MultiBloom {
+    const vector<string>& dataset;
+
+    bool has_prev = false;
+    size_t prev_changed_dim_id{};
+    double prev_fpr_at_prev_changed_dim_id{};
+    char prev_is_leaf_char;
+
+
+public:
+    RichMultiBloom(const vector<string> &_dataset, const vector<pair<string, string> > &workload, double _seed_fpr,
+                   int _cutoff = -1, bool do_print = false) :
+            MultiBloom(_dataset, workload, _seed_fpr, _cutoff, do_print), dataset(_dataset) {
+
+    };
+
+    PointQueryParams *get_params() override
+    {
+        return new RichMultiBloomParams(params);
+    }
+
+
+
+    void perturb(size_t dim_id, double mult, char is_leaf_char) {
+        assert(cutoff >= 0);
+        assert(0 <= dim_id && dim_id < (size_t)cutoff);
+        const double min_mult = 0.5;
+        const double max_mult = 2.0;
+        assert(min_mult > 0 && min_mult < 1.0);
+        assert(max_mult > 1.0);
+        assert(min_mult <= mult && mult <= max_mult);
+
+        assert(dim_id < params.size());
+
+        if(has_prev)
+        {
+            assert(prev_is_leaf_char == is_leaf_char);
+        }
+        else
+        {
+            prev_is_leaf_char = is_leaf_char;
+        }
+
+        has_prev = true;
+        prev_changed_dim_id = dim_id;
+        prev_fpr_at_prev_changed_dim_id = params[dim_id].second;
+
+        const double half = 1.0/max_mult;
+        if(mult >= 1.0) {
+            if (params[dim_id].second > half) {
+                double inv_mult = 1.0/mult;
+                params[dim_id].second = params[dim_id].second + (1.0 - params[dim_id].second)* inv_mult;
+            }
+            else
+            {
+                params[dim_id].second *= mult;
+            }
+        }
+        else
+        {
+            params[dim_id].second *= mult;
+        }
+
+        bfs[dim_id].clear_memory();
+        bfs[dim_id] = bloom_filter(get_bloom_parameters(params[dim_id].first, params[dim_id].second));
+
+        for(size_t i = 0;i<dataset.size(); i++)
+        {
+            string super_str = dataset[i] + is_leaf_char;
+            if(lvl(super_str) >= dim_id)
+            {
+                insert(super_str.substr(0, dim_id+1));
+            }
+        }
+    }
+
+    void undo() {
+        assert(has_prev);
+
+        size_t dim_id = prev_changed_dim_id;
+        double fpr = prev_fpr_at_prev_changed_dim_id;
+        char is_leaf_char = prev_is_leaf_char;
+
+        params[dim_id].second = fpr;
+
+        bfs[dim_id].clear_memory();
+        bfs[dim_id] = bloom_filter(get_bloom_parameters(params[dim_id].first, params[dim_id].second));
+
+        for(size_t i = 0;i<dataset.size(); i++)
+        {
+            string super_str = dataset[i] + is_leaf_char;
+            if(lvl(super_str) >= dim_id)
+            {
+                insert(super_str.substr(0, dim_id+1));
+            }
+        }
     }
 };
 

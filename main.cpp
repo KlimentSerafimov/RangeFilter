@@ -127,7 +127,7 @@ void extract_dataset(string file_path, string dest_path, int num_keys)
 }
 
 
-RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<pair<string, string> >& workload, RangeFilterTemplate* rf)
+RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<pair<string, string> >& workload, RangeFilterTemplate* rf, bool do_print)
 {
     int num_positive = 0;
     int num_negative = 0;
@@ -174,15 +174,18 @@ RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<p
 
     assert(num_false_negatives == 0);
 
-    cout << rf->get_memory() << " bytes" << endl;
-    cout << "true_positives " << true_positives << endl;
-    cout << "true_negatives " << true_negatives << endl;
-    cout << "false_positives " << num_false_positives << endl;
-    cout << "false_negatives " << num_false_negatives << endl;
-    cout << "sum " << true_negatives+true_positives+num_false_positives+num_false_negatives <<" workload.size() "<<  workload.size() << endl;
+    assert(true_negatives + true_positives + num_false_positives + num_false_negatives == (int) workload.size());
+    if(do_print) {
+        cout << rf->get_memory() << " bytes" << endl;
+        cout << "true_positives " << true_positives << endl;
+        cout << "true_negatives " << true_negatives << endl;
+        cout << "false_positives " << num_false_positives << endl;
+        cout << "false_negatives " << num_false_negatives << endl;
+        cout << "sum " << true_negatives + true_positives + num_false_positives + num_false_negatives
+             << " workload.size() " << workload.size() << endl;
 
-    assert(true_negatives+true_positives+num_false_positives+num_false_negatives == (int)workload.size());
-    cout << "assert(true_negatives+true_positives+num_false_positives+num_false_negatives == workload.size()); passed" << endl;
+        cout << "assert(true_negatives+true_positives+num_false_positives+num_false_negatives == workload.size()); passed" << endl;
+    }
 
 
     RangeFilterStats ret(
@@ -505,20 +508,91 @@ int main() {
 void simulated_annealing(ofstream& output_file)
 {
     double seed_fpr = 0.01;
-    int seed_cutoff = 7;
-    bool do_print = true;
+    int seed_cutoff = 12;
+    bool do_print = false;
 
-    Frontier<MultiBloomParams> frontier(2);
+    int output_frontier_every = 10;
 
-    PointQuery *pq;
-    pq = new MultiBloom(dataset, workload, seed_fpr, seed_cutoff, true);
+    Frontier<RichMultiBloomParams> frontier(2);
+
+    RichMultiBloom *pq;
+    pq = new RichMultiBloom(dataset, workload, seed_fpr, seed_cutoff, true);
     auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
 
-    RangeFilterStats ret = test_range_filter(dataset, workload, rf);
+    RangeFilterStats ret = test_range_filter(dataset, workload, rf, do_print);
 
-    assert(frontier.insert(*((MultiBloomParams*)ret.get_params()), ret.to_vector()));
+    assert(frontier.insert(*((RichMultiBloomParams*)ret.get_params()), ret.to_vector()));
 
+    cout << ret.to_string() << endl;
 
+    ofstream frontiers("frontiers.out");
+
+    int iter = 1;
+    int total_num_inserts = 1;
+
+    int stagnation_count = 0;
+    int max_stagnation = 0;
+
+    while(true)
+    {
+        iter+=1;
+
+        int dim_id = rand() % seed_cutoff;
+        double mult = 0.5;
+        if(rand()%2 == 0)
+        {
+            mult = 2.0;
+        }
+
+        pq->perturb(dim_id, mult, rf->get_is_leaf_char());
+
+        RangeFilterStats ret = test_range_filter(dataset, workload, rf, do_print);
+
+        cout << endl;
+        cout << "ITER " << iter << endl;
+        output_file << "ITER " << iter << endl;
+        if(frontier.insert(*((RichMultiBloomParams*)ret.get_params()), ret.to_vector()))
+        {
+            total_num_inserts+=1;
+            stagnation_count = 0;
+
+            cout << "INSERT & CONTINUE" << endl;
+            output_file << "INSERT & CONTINUE" << endl;
+
+            cout << "|frontier| = " << frontier.get_size() << endl;
+            output_file << "|frontier| = " << frontier.get_size() << endl;
+            cout << "|inserts| = " << total_num_inserts << endl;
+            output_file << "|inserts| = " << total_num_inserts << endl;
+        }
+        else
+        {
+            stagnation_count+=1;
+            max_stagnation = max(max_stagnation, stagnation_count);
+            cout << "UNDO" << endl << "|stagnation| " << stagnation_count << endl << "|max_stagnation| " << max_stagnation << endl;
+            output_file << "UNDO" << endl << "|stagnation| " << stagnation_count << endl << "|max_stagnation| " << max_stagnation << endl;
+            pq->undo();
+        }
+
+        cout << ret.to_string() << endl << endl;
+        output_file << ret.to_string() << endl << endl;
+
+        if(iter % output_frontier_every == 0)
+        {
+            const vector<FrontierPoint<RichMultiBloomParams> >& vec = frontier.get_frontier();
+
+            frontiers << "ITER " << iter << endl;
+            frontiers << "|inserts| = " << total_num_inserts << endl;
+            frontiers << "|stagnation| " << stagnation_count << endl;
+            frontiers << "|max_stagnation| " << max_stagnation << endl;
+            frontiers << "|frontier| = " << frontier.get_size() << endl;
+            for(size_t i = 0;i<vec.size();i++)
+            {
+                frontiers << vec[i].to_string() << endl;
+            }
+
+            frontiers << endl;
+        }
+    }
 
 }
 
@@ -555,7 +629,7 @@ void grid_search(const string& range_filter_type, ofstream& output_file){
                 assert(false);
             }
             auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
-            RangeFilterStats ret = test_range_filter(dataset, workload, rf);
+            RangeFilterStats ret = test_range_filter(dataset, workload, rf, do_print);
             rf->clear();
             output_file << ret.to_string() << endl;
             cout << ret.to_string() << endl;

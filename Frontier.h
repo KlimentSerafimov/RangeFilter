@@ -10,6 +10,7 @@
 #include <vector>
 #include <string>
 #include <cassert>
+#include <iostream>
 
 using namespace std;
 
@@ -42,7 +43,7 @@ public:
     FrontierPoint(ParamsType _params, vector<double> _score): params(_params), score(std::move(_score))
     {}
 
-    bool is_erased()
+    bool is_erased() const
     {
         return is_erased_;
     }
@@ -66,16 +67,35 @@ public:
         return score;
     }
 
-    string to_string()
+    string to_string() const
     {
         assert(!is_erased());
-        string ret = params.to_string() + "\tscore\t";
-        for(int i = 0;i<score.size();i++)
+        string ret = "SCORE\t";
+        for(size_t i = 0;i<score.size();i++)
         {
             ret+=std::to_string(score[i])+" ";
         }
+        ret += "\tPARAMS\t" + params.to_string();
         return ret;
     }
+
+    bool operator < (const FrontierPoint<ParamsType>& other) const
+    {
+        assert(other.score.size() == score.size());
+        for(size_t i = 0;i<score.size();i++)
+        {
+            if(score[i] < other.score[i])
+            {
+                return true;
+            }
+            else if(score[i] > other.score[i])
+            {
+                return false;
+            }
+        }
+        return false;
+    }
+
 };
 
 /**
@@ -90,6 +110,31 @@ class Frontier
 {
     size_t num_objectives;
     vector<FrontierPoint<ParamsType> > frontier;
+    size_t num_erased = 0;
+
+
+/**
+    def remove_erased(self):
+        new_frontier = []
+        for point in self.frontier:
+            if not point.erased:
+                new_frontier.append(point)
+        self.frontier = new_frontier
+*/
+    void remove_erased()
+    {
+        vector<FrontierPoint<ParamsType> > new_frontier;
+        for(auto point : frontier)
+        {
+            if(!point.is_erased())
+            {
+                new_frontier.push_back(point);
+            }
+        }
+        frontier = new_frontier;
+        num_erased = 0;
+    }
+
 public:
     explicit Frontier(size_t _num_objectives): num_objectives(_num_objectives){}
 
@@ -129,7 +174,7 @@ public:
             bool point_dominates_new_point = true;
             for(size_t dim_id = 0; dim_id < num_objectives; dim_id++)
             {
-                if(score[dim_id] > point[dim_id]) {
+                if(score[dim_id] < point[dim_id]) {
                     point_dominates_new_point = false;
                     break;
                 }
@@ -163,7 +208,7 @@ public:
                 bool point_is_dominated = true;
                 for(size_t i = 0; i<num_objectives; i++)
                 {
-                    if(point[i] > score[i])
+                    if(point[i] < score[i])
                     {
                         point_is_dominated = false;
                         break;
@@ -171,10 +216,17 @@ public:
                 }
                 if(point_is_dominated) {
                     point.erase();
+                    num_erased+=1;
                 }
             }
             FrontierPoint<ParamsType> new_point = FrontierPoint<ParamsType>(params, score);
             frontier.push_back(new_point);
+
+            if(num_erased*2 >= frontier.size())
+            {
+                remove_erased();
+            }
+
             return true;
         }
         else
@@ -184,26 +236,6 @@ public:
 
     }
 
-/**
-    def remove_erased(self):
-        new_frontier = []
-        for point in self.frontier:
-            if not point.erased:
-                new_frontier.append(point)
-        self.frontier = new_frontier
-*/
-    void remove_erased()
-    {
-        vector<FrontierPoint<ParamsType> > new_frontier;
-        for(auto point : frontier)
-        {
-            if(!point.is_erased())
-            {
-                new_frontier.push_back(point);
-            }
-        }
-        frontier = new_frontier;
-    }
 
 /**
     def __len__(self):
@@ -215,15 +247,7 @@ public:
 */
     size_t get_size()
     {
-        size_t ret = 0;
-        for(auto point : frontier)
-        {
-            if(!point.is_erased())
-            {
-                ret+=1;
-            }
-        }
-        return ret;
+        return frontier.size()-num_erased;
     }
 
 /**
@@ -234,6 +258,8 @@ public:
  */
     const vector<FrontierPoint<ParamsType> >& get_frontier()
     {
+        remove_erased();
+        sort(frontier.begin(), frontier.end());
         return frontier;
     }
 

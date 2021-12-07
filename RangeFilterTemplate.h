@@ -6,6 +6,7 @@
 #define SURF_RANGEFILTERTEMPLATE_H
 
 #include <string>
+#include <utility>
 #include <vector>
 #include <cstring>
 #include <iostream>
@@ -89,7 +90,7 @@ class RangeFilterTemplate
 
     bool contains(string s)
     {
-        return pq->contains(s);
+        return pq->contains(std::move(s));
     }
     void insert_prefixes(const vector<string>& dataset){
         long long num_inserted = 0;
@@ -117,7 +118,7 @@ class RangeFilterTemplate
         }
     }
 
-    bool str_invariant(string q)
+    bool str_invariant(string q) const
     {
         bool ret = true;
         for(int i = 0;i<(int)q.size();i++)
@@ -330,6 +331,10 @@ public:
     PointQueryParams* get_params()
     {
         return pq->get_params();
+    }
+
+    char get_is_leaf_char() const {
+        return is_leaf_char;
     }
 };
 

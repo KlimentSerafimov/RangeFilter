@@ -11,7 +11,7 @@ using namespace std;
 class PointQueryParams
 {
 public:
-    virtual string to_string()
+    virtual string to_string() const
     {
         assert(false);
     }
@@ -43,6 +43,7 @@ public:
     {
         assert(false);
     }
+
 };
 
 
@@ -71,7 +72,7 @@ public:
 
     string to_string() const {
         string ret;
-        ret += params->to_string()+"\tbits_per_key\t"+std::to_string(bits_per_key())+"\tfalse_positive_rate(%)\t"+std::to_string(false_positive_rate());
+        ret += "BPK\t"+std::to_string(bits_per_key())+"\tFPR(%)\t"+std::to_string(false_positive_rate())+"\tPARAMS\t"+params->to_string();
         return ret;
     }
 
