@@ -105,12 +105,6 @@ public:
     {
         bf.clear_memory();
     }
-
-    PointQueryParams* get_params() override
-    {
-        return new OneBloomParams(seed_fpr, cutoff);
-    }
-
 };
 
 

@@ -25,7 +25,32 @@ class Trie {
     char init_char;
     int max_length;
 
+    int count_ret_false = 0;
+
+    bool ret(bool val)
+    {
+        if(!val)
+        {
+            count_ret_false+=1;
+        }
+        return val;
+    }
+
 public:
+
+    int sum_count_ret_false()
+    {
+        int ret = count_ret_false;
+        for(int i = 0;i<CHAR_SIZE;i++)
+        {
+            if(character[i] != nullptr)
+            {
+                ret += character[i]->sum_count_ret_false();
+            }
+        }
+        return ret;
+    }
+
     // constructor
     Trie(){
         this->isleaf = false;
@@ -85,6 +110,8 @@ public:
     }
 
     string get_init_char();
+
+    unsigned long long get_memory();
 };
 
 #endif //RANGEFILTER_TRIE_H

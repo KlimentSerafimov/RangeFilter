@@ -334,7 +334,7 @@ int test_bloom_filter()
 
 vector<pair<string, string> > workload;
 
-int prep_dataset_and_workload(const string& file_path, string workload_difficulty)
+int prep_dataset_and_workload(const string& file_path, string workload_difficulty, int impossible_depth = -1)
 {
 
     workload_seed_and_dataset = read_dataset(file_path);
@@ -396,8 +396,6 @@ int prep_dataset_and_workload(const string& file_path, string workload_difficult
                 //hard workload
                 string left_key = workload_seed[i];
                 string right_key = workload_seed[i + 1];
-                left_key += init_char;
-                right_key[right_key.size() - 1] -= 1;
 
                 workload.emplace_back(make_pair(left_key, right_key));
             }else {
@@ -415,9 +413,22 @@ int prep_dataset_and_workload(const string& file_path, string workload_difficult
                 //hard workload
                 string left_key = dataset[i];
                 string right_key = dataset[i + 1];
-                left_key += init_char;
-                right_key[right_key.size() - 1] -= 1;
 
+                if(left_key >= right_key)
+                {
+                    continue;
+                }
+                if(impossible_depth == -1) {
+                    left_key += init_char;
+                    right_key[right_key.size() - 1] -= 1;
+                    assert(left_key < right_key);
+                }
+                else
+                {
+                    assert(impossible_depth >= 1);
+                    assert(false);
+//                    if(impossible_depth > left_key)
+                }
                 workload.emplace_back(make_pair(left_key, right_key));
             } else {
                 assert(false);
@@ -457,11 +468,9 @@ int prep_dataset_and_workload(const string& file_path, string workload_difficult
     return num_bf_inserts;
 }
 
-int main_test_surf(const string& file_path, string workload_difficulty)
+int main_test_surf()
 {
-    prep_dataset_and_workload(file_path, workload_difficulty);
-
-    for(int trie_size = 1; trie_size <= 30; trie_size+=1) {
+    for(int trie_size = 1; trie_size <= 120; trie_size+=1) {
         SurfStats surf_ret = test_surf(dataset, workload, trie_size);
 
         cout << surf_ret.to_string() << endl;
@@ -471,23 +480,264 @@ int main_test_surf(const string& file_path, string workload_difficulty)
 void grid_search(const string& range_filter_type, ofstream& output_file);
 void simulated_annealing(ofstream& output_file);
 
+void eval_trie_heatmap()
+{
+    Trie trie = Trie(dataset);
 
+    cout << endl;
+    cout << "trie bpk " << (double)(trie.get_memory()*8)/(double)dataset.size() << endl;
+    int num_positive = 0;
+    int num_negative = 0;
+    int num_false_positives = 0;
+    int num_false_negatives = 0;
+
+    int true_positives = 0;
+    int true_negatives = 0;
+
+    for(size_t i = 0;i<workload.size();i++)
+    {
+        string left_key = workload[i].first;
+        string right_key = workload[i].second;
+
+        bool ground_truth = contains(dataset, left_key, right_key);
+
+        if(ground_truth)
+        {
+            continue;
+        }
+
+        bool prediction = (&trie)->query(left_key, right_key);
+
+        if(ground_truth)
+        {
+            num_positive+=1;
+            if(!prediction)
+            {
+                num_false_negatives+=1;
+                assert(false);
+            }
+            else
+            {
+                true_positives+=1;
+            }
+        }
+        else
+        {
+            num_negative+=1;
+            if(prediction)
+            {
+                num_false_positives +=1;
+            }
+            else
+            {
+                true_negatives += 1;
+            }
+        }
+
+        if((i+1)%1000000 == 0)
+        {
+            cout << "tested " << i+1 << "/" << workload.size() << endl;
+        }
+    }
+
+    assert(num_false_positives == 0);
+    assert(num_false_negatives == 0);
+
+    cout << "all correct" << endl;
+
+    cout << "num ret_false " << trie.sum_count_ret_false() << " num_negatives " << num_negative << endl;
+    cout << "num negative_point_queries/num_negatives " << (double) trie.sum_count_ret_false() / num_negative << endl;
+
+//    easy
+//    num ret_false 24999 num_negatives 24999
+//    num negative_point_queries/num_negatives 1
+
+//    medium
+//    num ret_false 23318 num_negatives 21552
+//    num negative_point_queries/num_negatives 1.08194
+
+//    hard
+//    num ret_false 16268 num_negatives 12467
+//    num negative_point_queries/num_negatives 1.30488
+
+//    impossible
+//    num ret_false 461930 num_negatives 24999
+//    num negative_point_queries/num_negatives 18.4779
+
+
+
+
+
+}
+
+void eval_rf_heatmap()
+{
+    RichMultiBloom *pq;
+    bool do_print = true;
+    pq = new RichMultiBloom(dataset, workload, 0.0000000001, -1, do_print);
+    auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
+
+
+//    cout << endl;
+//    cout << "trie bpk " << (double)(trie.get_memory()*8)/(double)dataset.size() << endl;
+
+    int num_positive = 0;
+    int num_negative = 0;
+    int num_false_positives = 0;
+    int num_false_negatives = 0;
+
+    int true_positives = 0;
+    int true_negatives = 0;
+
+    for(size_t i = 0;i<workload.size();i++)
+    {
+        string left_key = workload[i].first;
+        string right_key = workload[i].second;
+
+        bool ground_truth = contains(dataset, left_key, right_key);
+
+        if(ground_truth)
+        {
+            continue;
+        }
+
+        bool prediction = rf->query(left_key, right_key);
+
+        if(ground_truth)
+        {
+            num_positive+=1;
+            if(!prediction)
+            {
+                num_false_negatives+=1;
+                assert(false);
+            }
+            else
+            {
+                true_positives+=1;
+            }
+        }
+        else
+        {
+            num_negative+=1;
+            if(prediction)
+            {
+                num_false_positives +=1;
+            }
+            else
+            {
+                true_negatives += 1;
+            }
+        }
+
+        if((i+1)%1000000 == 0)
+        {
+            cout << "tested " << i+1 << "/" << workload.size() << endl;
+        }
+    }
+
+    assert(num_false_positives == 0);
+    assert(num_false_negatives == 0);
+
+    cout << "all correct" << endl;
+
+    cout << "num negative_point_queries " << rf->get_negative_point_queries() << " num_negatives " << num_negative << endl;
+    cout << "num negative_point_queries/num_negatives " << (double) rf->get_negative_point_queries() / num_negative << endl;
+
+    //TRIE
+//50k
+//    easy
+//    num ret_false 24999 num_negatives 24999
+//    num negative_point_queries/num_negatives 1
+
+//    medium
+//    num ret_false 23318 num_negatives 21552
+//    num negative_point_queries/num_negatives 1.08194
+
+//    hard
+//    num ret_false 16268 num_negatives 12467
+//    num negative_point_queries/num_negatives 1.30488
+
+//    impossible
+//    num ret_false 461930 num_negatives 24999
+//    num negative_point_queries/num_negatives 18.4779
+
+//RF
+//50k
+//easy
+//    num negative_point_queries 24999 num_negatives 24999
+//    num negative_point_queries/num_negatives 1
+
+//medium
+//    num negative_point_queries 68378 num_negatives 21552
+//    num negative_point_queries/num_negatives 3.1727
+
+//hard
+//    num negative_point_queries 331456 num_negatives 12467
+//    num negative_point_queries/num_negatives 26.5867
+
+//impossible
+//    num negative_point_queries 39505877 num_negatives 24999
+//    num negative_point_queries/num_negatives 1580.3
+// 0.9  = x^1580
+
+
+//1M
+//    easy
+//    num negative_point_queries 499999 num_negatives 499995
+//    num negative_point_queries/num_negatives 1.00001
+
+//    medium
+
+//    num negative_point_queries 2118338 num_negatives 307724
+//    num negative_point_queries/num_negatives 6.88389
+
+//1k impossible
+
+//    num negative_point_queries 752820 num_negatives 499
+//    num negative_point_queries/num_negatives 1508.66
+
+
+
+}
 
 int main() {
 
 
     string file_folder;
-    string file_name = "50k_dataset.txt";
-    string workload_difficulty = "hard"; //choose from "easy", "medium", "hard", "impossible"
-    string range_filter_type = "multi_bloom"; // choose from "surf", "one_bloom", "multi_bloom"
-    string parameter_search_style = "simulated_annealing"; // choose from "grid_search", "simulated_annealing"
+    string file_name = "10k_dataset.txt";
+    string workload_difficulty = "medium"; //choose from "easy", "medium", "hard", "impossible"
+    string range_filter_type = "hybrid"; // choose from "heatmap", "trie", "surf", "one_bloom", "multi_bloom", "hybrid"
+    string parameter_search_style = "grid_search"; // choose from "no_search", "grid_search", "simulated_annealing"
 
-    if (range_filter_type == "surf") {
-        assert(parameter_search_style == "grid_search");
-        main_test_surf(file_folder + file_name, workload_difficulty);
+    string file_path = file_folder + file_name;
+
+    bool do_extract_dataset = false;
+    if (do_extract_dataset) {
+        extract_dataset(file_path, "1k_dataset.txt", 1000);
         return 0;
     }
 
+    prep_dataset_and_workload(file_path, workload_difficulty);
+
+    if (range_filter_type == "surf") {
+        assert(parameter_search_style == "grid_search");
+        main_test_surf();
+        return 0;
+    }
+
+    if(range_filter_type == "heatmap")
+    {
+        assert(parameter_search_style == "no_search");
+        eval_rf_heatmap();
+        return 0;
+    }
+
+    if(range_filter_type == "trie")
+    {
+        assert(parameter_search_style == "no_search");
+        eval_trie_heatmap();
+        return 0;
+    }
 //    micro unit tests
 //    eval_trie_vs_rf();
 //    return 0;
@@ -498,13 +748,7 @@ int main() {
 //    string file_folder = "/home/kliment/Downloads/";
 //    string file_name = "emails-validated-random-only-30-characters.txt.sorted";
 
-    string file_path = file_folder + file_name;
 
-    bool do_extract_dataset = false;
-    if (do_extract_dataset) {
-        extract_dataset(file_path, "50k_dataset.txt", 50000);
-        return 0;
-    }
 
     prep_dataset_and_workload(file_path, workload_difficulty);
 
@@ -527,21 +771,22 @@ int main() {
 
 void simulated_annealing(ofstream& output_file)
 {
-    double seed_fpr = 0.005;
-    int seed_cutoff = 9;
-    bool do_print = false;
+    double seed_fpr = 0.1;
+
+    int seed_cutoff = 7;
+    bool do_print = true;
 
     vector<string> dim_names;
     dim_names.emplace_back("bpk");
     dim_names.emplace_back("fpr");
 
-    int output_frontier_every = 100;
+    int output_frontier_every = 20;
 
     Frontier<RichMultiBloomParams> frontier(2);
 
     RichMultiBloom *pq;
-    pq = new RichMultiBloom(dataset, workload, seed_fpr, seed_cutoff, true);
-    auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
+    pq = new RichMultiBloom(dataset, workload, seed_fpr, seed_cutoff, do_print);
+    RangeFilterTemplate *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
 
     RangeFilterStats ret = test_range_filter(dataset, workload, rf, do_print);
 
@@ -564,7 +809,7 @@ void simulated_annealing(ofstream& output_file)
 
     size_t stagnation_count = 0;
 
-    const size_t stagnation_count_cutoff_for_annealing_epoch_transition = 3; //seed_cutoff*4;
+    const size_t stagnation_count_cutoff_for_annealing_epoch_transition = seed_cutoff; //seed_cutoff*4;
     const size_t max_reinitialization_count = 1;
 
     while(true)
@@ -744,24 +989,24 @@ void simulated_annealing(ofstream& output_file)
 
 void grid_search(const string& range_filter_type, ofstream& output_file){
 
-    for(int cutoff = -1; cutoff < 20; cutoff++) {
+    for(int cutoff = 0; cutoff < 20; cutoff++) {
 
         const int num_seed_fprs = 10;
         float seed_fprs[num_seed_fprs] = {
-                0.0000001,
-                0.000001,
-                0.00001,
-                0.0001,
+//                0.0000001,
+//                0.000001,
+//                0.00001,
+//                0.0001,
                 0.001,
                 0.005,
                 0.01,
                 0.05,
                 0.1,
                 0.2,
-//                0.3,
-//                0.4,
-//                0.5,
-//                0.6,
+                0.3,
+                0.4,
+                0.5,
+                0.6,
 //                0.7,
 //                0.8,
 //                0.9,

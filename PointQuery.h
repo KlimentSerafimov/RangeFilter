@@ -6,6 +6,7 @@
 #define SURF_POINTQUERY_H
 
 #include <string>
+#include <vector>
 using namespace std;
 
 class PointQueryParams
@@ -17,7 +18,7 @@ public:
     }
 };
 
-class PointQuery
+class PointQuery: public PointQueryParams
 {
 public:
     virtual bool contains(string s)
@@ -38,12 +39,6 @@ public:
     {
         assert(false);
     }
-
-    virtual PointQueryParams* get_params()
-    {
-        assert(false);
-    }
-
 };
 
 

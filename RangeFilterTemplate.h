@@ -24,6 +24,8 @@ class RangeFilterTemplate
     int max_length{};
     long long total_num_chars{};
 
+    int negative_point_queries = 0;
+
     void calc_metadata(const vector<string>& dataset, const vector<pair<string, string> >& workload, bool do_print)
     {
         last_char = (char)0;
@@ -80,6 +82,7 @@ class RangeFilterTemplate
             cout << "RANGE FILTER STATS" << endl;
             cout << "num_strings " << (int) dataset.size() << endl;
             cout << "num_chars " << total_num_chars << endl;
+            cout << "max_length " << max_length << endl;
             cout << "init_char " << init_char << endl;
             cout << "last_char " << last_char << endl;
             cout << "last_char-init_char+1 " << last_char - init_char + 1 << endl;
@@ -90,7 +93,12 @@ class RangeFilterTemplate
 
     bool contains(string s)
     {
-        return pq->contains(std::move(s));
+        bool ret = pq->contains(std::move(s));
+        if(!ret)
+        {
+            negative_point_queries += 1;
+        }
+        return ret;
     }
     bool str_invariant(string q) const
     {
@@ -330,11 +338,15 @@ public:
 
     PointQueryParams* get_params()
     {
-        return pq->get_params();
+        return pq;
     }
 
     char get_is_leaf_char() const {
         return is_leaf_char;
+    }
+
+    int get_negative_point_queries() {
+        return negative_point_queries;
     }
 };
 

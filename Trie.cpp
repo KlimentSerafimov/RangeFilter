@@ -48,13 +48,14 @@ void breakpoint(bool ret)
 
 bool Trie::query(string left, string right) {
     assert(left <= right);
-    assert(left.size() >= 1 && right.size() >= 1);
+    assert(!left.empty() && !right.empty());
 
     if(left[0] == right[0])
     {
         char c = left[0];
         if(character[(int)c] == nullptr)
         {
+            return ret(false);
             return false;
         }
         else
@@ -65,6 +66,7 @@ bool Trie::query(string left, string right) {
             {
                 if(character[(int)c]->isleaf)
                 {
+                    return ret(true);
                     return true;
                 }
                 left_rec += init_char;
@@ -75,8 +77,10 @@ bool Trie::query(string left, string right) {
                 {
                     assert(false);
                 }
+                return ret(false);
                 return false;
             }
+//            return ret(character[(int)c]->query(left_rec, right_rec));
             return character[(int)c]->query(left_rec, right_rec);
         }
     }
@@ -85,6 +89,7 @@ bool Trie::query(string left, string right) {
     {
         if(character[(int)c] != nullptr)
         {
+            return ret(true);
             return true;
         }
     }
@@ -101,6 +106,7 @@ bool Trie::query(string left, string right) {
                 if(character[(int)left[0]]->isleaf)
                 {
                     breakpoint(true);
+                    return ret(true);
                     return true;
                 }
                 left_rec += init_char;
@@ -110,10 +116,11 @@ bool Trie::query(string left, string right) {
                     right_rec += last_char;
                 }
             }
-            bool ret = character[(int)left[0]]->query(left_rec, right_rec);
+            bool ret_val = character[(int)left[0]]->query(left_rec, right_rec);
 
-            if (ret) {
-                return ret;
+            if (ret_val) {
+//                return ret(ret_val);
+                return ret_val;
             }
         }
     }
@@ -122,6 +129,7 @@ bool Trie::query(string left, string right) {
         if(character[(int)right[0]] == nullptr)
         {
             breakpoint(false);
+            return ret(false);
             return false;
         }
 
@@ -129,6 +137,7 @@ bool Trie::query(string left, string right) {
         {
 
             breakpoint(true);
+            return ret(true);
             return true;
         }
 
@@ -141,11 +150,13 @@ bool Trie::query(string left, string right) {
         }
         if (right_rec.empty()) {
             breakpoint(false);
+            return ret(false);
             return false;
         }
 
-        bool ret = character[(int)right[0]]->query(left_rec, right_rec);
-        return ret;
+        bool ret_val = character[(int)right[0]]->query(left_rec, right_rec);
+//        return ret(ret_val);
+        return ret_val;
     }
 }
 
@@ -200,6 +211,42 @@ bool Trie::deletion(Trie *&curr, string key){
 
 string Trie::get_init_char() {
     return ""+init_char;
+}
+
+unsigned long long Trie::get_memory() {
+
+//    bool isleaf;
+//    Trie* parent = nullptr; //opt away
+//    Trie *character[CHAR_SIZE]{};
+//
+//    char last_char;  //opt away
+//    char init_char;  //opt away
+//    int max_length;  //opt away
+
+    unsigned long long ret = 0;
+    int unused = 0;
+    for(int i = 0;i<CHAR_SIZE; i++)
+    {
+        if(character[i] != nullptr)
+        {
+            ret += character[i]->get_memory();
+        }
+        else
+        {
+            unused += 1;
+        }
+    }
+
+    //1264.27
+    return ret + sizeof(bool) + (CHAR_SIZE-unused)*sizeof(Trie*);
+
+    //143987
+    return ret + sizeof(bool) + (CHAR_SIZE)*sizeof(Trie*);
+
+    //145953
+    return ret + sizeof(bool) + sizeof(Trie*) + CHAR_SIZE*sizeof(Trie*) + 2*sizeof(char) + sizeof(int);
+
+    return 0;
 }
 
 

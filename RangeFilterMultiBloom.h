@@ -18,17 +18,70 @@
 
 using namespace std;
 
-class MultiBloomParams: public PointQueryParams
-{
-    double seed_fpr;
-    int cutoff;
+class MultiBloomParams: public PointQueryParams {
+    vector<pair<int, double> > params;
 public:
-    MultiBloomParams(double _seed_fpr, int _cutoff): seed_fpr(_seed_fpr), cutoff(_cutoff) {}
-    string to_string() const override
+    explicit MultiBloomParams(vector<pair<int, double> > _fprs) : params(std::move(_fprs)) {}
+
+    const vector<pair<int, double> > &get_params() const {
+        return params;
+    };
+
+    virtual string to_string() const override
     {
-        return "seed_fpr\t" + std::to_string(seed_fpr) + "\tcutoff\t" + std::to_string(cutoff);
+        string ret;
+        for (size_t i = 0; i < params.size(); i++) {
+            ret += "lvl" + std::to_string(i) + "(keys " + std::to_string(params[i].first) + ", fpr " +
+                   std::to_string(params[i].second) + ") ";
+        }
+        return ret;
     }
 };
+
+class RichMultiBloomParams: public MultiBloomParams
+{
+
+private:
+    size_t iter_id{};
+    size_t epoch_id{};
+    size_t used_for_reinit_count = 0;
+public:
+
+    explicit RichMultiBloomParams(vector<pair<int, double> > _fprs): MultiBloomParams(std::move(_fprs)){}
+
+    string to_string() const override {
+        string ret;
+        ret = "METAPARAMS\titer " + std::to_string(iter_id) + " epoch " + std::to_string(epoch_id) + " reinit " +
+              std::to_string(used_for_reinit_count);
+        ret += "\tPARAMS\t";
+        ret += MultiBloomParams::to_string();
+        return ret;
+    }
+
+    RichMultiBloomParams *add_iter_and_epoch(size_t _iter_id, size_t _epoch_id) {
+        iter_id = _iter_id;
+        epoch_id = _epoch_id;
+        return this;
+    }
+
+    const size_t &get_iter_id() const {
+        return iter_id;
+    }
+
+    void used_for_reinit() {
+        used_for_reinit_count+=1;
+        epoch_id+=1;
+    }
+
+    size_t get_used_for_reinit_count() const {
+        return used_for_reinit_count;
+    }
+
+    size_t get_epoch() const {
+        return epoch_id;
+    }
+};
+
 
 class MultiBloom: public PointQuery
 {
@@ -188,63 +241,6 @@ public:
         }
         bfs.clear();
     }
-    PointQueryParams* get_params() override
-    {
-        return new MultiBloomParams(seed_fpr, cutoff);
-    }
-};
-
-class RichMultiBloomParams: public PointQueryParams
-{
-    vector<pair<int, double> > params;
-public:
-    explicit RichMultiBloomParams(vector<pair<int, double> > _fprs): params(std::move(_fprs)){}
-
-    string to_string() const override
-    {
-        string ret;
-        ret = "METAPARAMS\titer " + std::to_string(iter_id)+" epoch "+std::to_string(epoch_id) + " reinit " + std::to_string(used_for_reinit_count);
-        ret += "\tPARAMS\t";
-        for(size_t i = 0; i < params.size(); i++)
-        {
-            ret += "lvl" + std::to_string(i) + "(keys " + std::to_string(params[i].first) + ", fpr " + std::to_string(params[i].second) + ") ";
-        }
-        return ret;
-    }
-
-    const vector<pair<int, double> >& get_params() const
-    {
-        return params;
-    };
-
-private:
-    size_t iter_id{};
-    size_t epoch_id{};
-    size_t used_for_reinit_count = 0;
-public:
-
-    RichMultiBloomParams *add_iter_and_epoch(size_t _iter_id, size_t _epoch_id) {
-        iter_id = _iter_id;
-        epoch_id = _epoch_id;
-        return this;
-    }
-
-    const size_t &get_iter_id() const {
-        return iter_id;
-    }
-
-    void used_for_reinit() {
-        used_for_reinit_count+=1;
-        epoch_id+=1;
-    }
-
-    size_t get_used_for_reinit_count() const {
-        return used_for_reinit_count;
-    }
-
-    size_t get_epoch() const {
-        return epoch_id;
-    }
 };
 
 class RichMultiBloom: public MultiBloom {
@@ -255,18 +251,12 @@ class RichMultiBloom: public MultiBloom {
     double prev_fpr_at_prev_changed_dim_id{};
     char prev_is_leaf_char{};
 
-
 public:
     RichMultiBloom(const vector<string> &_dataset, const vector<pair<string, string> > &workload, double _seed_fpr,
                    int _cutoff = -1, bool do_print = false) :
             MultiBloom(_dataset, workload, _seed_fpr, _cutoff, do_print), dataset(_dataset) {
 
     };
-
-    PointQueryParams *get_params() override
-    {
-        return new RichMultiBloomParams(params);
-    }
 
     void reinitialize(const RichMultiBloomParams& new_params)
     {
