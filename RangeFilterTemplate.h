@@ -12,6 +12,8 @@
 #include <iostream>
 #include <cassert>
 #include "PointQuery.h"
+#include <map>
+#include <fstream>
 
 using namespace std;
 
@@ -91,12 +93,28 @@ class RangeFilterTemplate
         }
     }
 
-    bool contains(string s)
+public:
+    bool track_negative_point_queries = false;
+private:
+    map<string, int> prefix_to_negative_point_queries;
+
+    bool contains(const string& s)
     {
-        bool ret = pq->contains(std::move(s));
-        if(!ret)
+        if(s.empty())
         {
-            negative_point_queries += 1;
+            return true;
+        }
+        bool ret = pq->contains(s);
+        if(track_negative_point_queries) {
+            if (!ret) {
+                string sub_s = s.substr(0, s.size() - 1);
+                assert(contains(sub_s));
+                if (prefix_to_negative_point_queries.find(sub_s) == prefix_to_negative_point_queries.end()) {
+                    prefix_to_negative_point_queries[sub_s] = 0;
+                }
+                prefix_to_negative_point_queries[sub_s] += 1;
+                negative_point_queries += 1;
+            }
         }
         return ret;
     }
@@ -336,7 +354,7 @@ public:
         pq->clear();
     }
 
-    PointQueryParams* get_params()
+    PointQuery* get_point_query()
     {
         return pq;
     }
@@ -347,6 +365,81 @@ public:
 
     int get_negative_point_queries() {
         return negative_point_queries;
+    }
+
+    void analyze_negative_point_query_density_heatmap(const vector<pair<string, string> >& negative_workload) {
+        assert(track_negative_point_queries);
+
+        vector<pair<string, string> > inits;
+        vector<pair<string, string> > ends;
+
+        for(size_t i = 0;i<negative_workload.size();i++)
+        {
+            assert(negative_workload[i].first <= negative_workload[i].second);
+            inits.push_back(negative_workload[i]);
+            ends.emplace_back(negative_workload[i].second, negative_workload[i].first);
+        }
+
+        sort(inits.begin(), inits.end());
+        sort(ends.begin(), ends.end());
+
+        vector<pair<string, int> > array;
+        int sum = 0;
+        for(const auto& it: prefix_to_negative_point_queries) {
+            array.emplace_back(it.first, it.second);
+            sum+=it.second;
+        }
+        sort(array.begin(), array.end());
+        int prefix_sum = 0;
+        int at_init = 0;
+        int at_end = 0;
+        vector<pair<float, float> > densities;
+
+        ofstream out("densities.out");
+
+        pair<float, string> best_split = make_pair(-1, "");
+
+        for(size_t i = 0;i<array.size();i++)
+        {
+            prefix_sum+=array[i].second;
+            while(at_init < inits.size() && inits[at_init].first < array[i].first)
+            {
+                assert(inits[at_init].first != array[i].first);
+                if(inits[at_init].second > array[i].first) {
+                    assert(inits[at_init].second.size() > array[i].first.size());
+                    assert(inits[at_init].second.substr(0, array[i].first.size()) == array[i].first);
+                }
+                at_init+=1;
+            }
+            while(at_end < ends.size() && ends[at_end].first < array[i].first ||
+                    (ends[at_end].first > array[i].first && (
+                       ends[at_end].first.size() > array[i].first.size() &&
+                       ends[at_end].first.substr(0, array[i].first.size()) == array[i].first)))
+            {
+                at_end+=1;
+            }
+            if(at_end < ends.size()) {
+                assert(inits[at_end].first != array[i].first);
+                assert(ends[at_end].second > array[i].first);
+            }
+
+            float left_density = (float)prefix_sum/at_init;
+            float right_density = (float)(sum-prefix_sum)/(inits.size()-at_init);
+
+
+            densities.emplace_back(left_density,right_density);
+//            cout <<at_init <<" "<< left_density <<" "<< right_density << endl;
+
+            float score = right_density/left_density;
+            out << at_init << " "<< score << endl;
+
+            if(at_init < inits.size())
+            best_split = max(best_split, make_pair(score, inits[at_init].first));
+
+        }
+        out.close();
+
+        cout << best_split.first <<" "<< best_split.second << endl;
     }
 };
 

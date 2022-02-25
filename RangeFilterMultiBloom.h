@@ -19,8 +19,17 @@
 using namespace std;
 
 class MultiBloomParams: public PointQueryParams {
+protected:
     vector<pair<int, double> > params;
 public:
+
+    MultiBloomParams* clone() const override
+    {
+        return new MultiBloomParams(params);
+    }
+
+    explicit MultiBloomParams() {}
+
     explicit MultiBloomParams(vector<pair<int, double> > _fprs) : params(std::move(_fprs)) {}
 
     const vector<pair<int, double> > &get_params() const {
@@ -83,7 +92,7 @@ public:
 };
 
 
-class MultiBloom: public PointQuery
+class MultiBloom: public PointQuery, public MultiBloomParams
 {
 
     int max_length{};
@@ -94,7 +103,6 @@ class MultiBloom: public PointQuery
 protected:
     vector<bloom_filter> bfs;
     int cutoff{};
-    vector<pair<int, double> > params;
 private:
 
     void calc_metadata(const vector<string>& dataset, bool do_print)
@@ -173,14 +181,19 @@ protected:
 
 public:
 
+    MultiBloomParams* clone() const override
+    {
+        return MultiBloomParams::clone();
+    }
+
     MultiBloom()= default;
 
     MultiBloom(const vector<string>& dataset, double _seed_fpr, int _cutoff = -1, bool do_print = false):
     seed_fpr(_seed_fpr), cutoff(_cutoff){
-        for(int i = 0;i<dataset.size();i++)
-        {
-            cout << dataset[i] << endl;
-        }
+//        for(int i = 0;i<dataset.size();i++)
+//        {
+//            cout << dataset[i] << endl;
+//        }
         calc_metadata(dataset, do_print);
         size_t max_lvl = num_prefixes_per_level.size();
         if(cutoff != -1)
@@ -245,6 +258,11 @@ public:
             bfs[i].clear_memory();
         }
         bfs.clear();
+    }
+
+    string to_string() const override
+    {
+        return MultiBloomParams::to_string();
     }
 };
 

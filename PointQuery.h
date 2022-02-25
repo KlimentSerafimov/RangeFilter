@@ -12,15 +12,21 @@ using namespace std;
 class PointQueryParams
 {
 public:
+    PointQueryParams() = default;
     virtual string to_string() const
+    {
+        assert(false);
+    }
+    virtual PointQueryParams* clone() const
     {
         assert(false);
     }
 };
 
-class PointQuery: public PointQueryParams
+class PointQuery: virtual public PointQueryParams
 {
 public:
+    PointQuery(): PointQueryParams() {}
     virtual bool contains(string s)
     {
         assert(false);
@@ -45,14 +51,14 @@ public:
 class RangeFilterStats
 {
 public:
-    PointQueryParams* params;
+    PointQuery* params;
     int num_keys;
     int num_queries;
     int num_false_positives;
     int num_negatives;
     unsigned long long total_num_bits;
     RangeFilterStats(
-            PointQueryParams* _params,
+            PointQuery* _params,
             int _num_keys,
             int _num_queries,
             int _num_false_positives,
@@ -67,7 +73,8 @@ public:
 
     string to_string() const {
         string ret;
-        ret += "SCORE\tbpk "+std::to_string(bits_per_key())+" fpr "+std::to_string(false_positive_rate())+"\t"+params->to_string();
+        ret += "SCORE\tbpk "+std::to_string(bits_per_key())+" fpr "+std::to_string(false_positive_rate())+
+                "\n"+params->to_string();
         return ret;
     }
 

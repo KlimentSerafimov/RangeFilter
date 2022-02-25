@@ -66,17 +66,10 @@ void eval_trie_vs_rf()
 
     bool do_print = true;
 
-    size_t max_query_len = 0;
-    for(int i = 0;i<workload.size();i++)
-    {
-        max_query_len = max(max_query_len, workload[i].first.size());
-        max_query_len = max(max_query_len, workload[i].second.size());
-    }
-
 //    auto* multi_bloom = new MultiBloom(dataset, 0.0001, -1, do_print);
 //    RangeFilterTemplate* rf = new RangeFilterTemplate(dataset, workload, multi_bloom, do_print);
 
-    auto* pq = new HybridPointQuery(dataset, "aaazzz", -1, -1, do_print);
+    auto* pq = new HybridPointQuery(dataset, "aaazzz", -1, 0.001, -1, 0.001, do_print);
     auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
 
     cout << "start eval" << endl;
@@ -156,7 +149,6 @@ void extract_dataset(string file_path, string dest_path, int num_keys)
     out_file.close();
 }
 
-
 RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<pair<string, string> >& workload, RangeFilterTemplate* rf, bool do_print)
 {
     int num_positive = 0;
@@ -224,7 +216,7 @@ RangeFilterStats test_range_filter(const vector<string>& dataset, const vector<p
 
 
     RangeFilterStats ret(
-            rf->get_params(),
+            rf->get_point_query(),
             (int)dataset.size(),
             (int)workload.size(),
             num_false_positives,
@@ -406,23 +398,51 @@ int prep_dataset_and_workload(const string& file_path, string workload_difficult
 
     cout << "done sorting"<< endl;
 
+    string midpoint1 = "";
+    string midpoint2 = "";
 
-    if(workload_difficulty == "easy" || workload_difficulty == "medium" || workload_difficulty == "hard") {
+    if(workload_difficulty == "hybrid")
+    {
+        midpoint1 = dataset[dataset.size()/3];
+        midpoint2 = dataset[2*dataset.size()/3];
+        cout << "midpoint1: " << midpoint1 << endl;
+        cout << "midpoint2: " << midpoint2 << endl;
+    }
+
+    if(workload_difficulty == "easy" || workload_difficulty == "medium" || workload_difficulty == "hard" || workload_difficulty == "hybrid") {
         for (size_t i = 0; i < workload_seed.size() - 1; i++) {
-            if (workload_difficulty == "easy") {
+            string local_workload_difficulty = workload_difficulty;
+
+            if(local_workload_difficulty == "hybrid")
+            {
+                if(workload_seed[i] < midpoint1)
+                {
+                    local_workload_difficulty = "hard";
+                }
+                else if(workload_seed[i] < midpoint2)
+                {
+                    local_workload_difficulty = "easy";
+                }
+                else
+                {
+                    local_workload_difficulty = "hard";
+                }
+            }
+
+            if (local_workload_difficulty == "easy") {
                 //eeasy workload
                 string left_key = workload_seed[i];
                 string right_key = left_key;
                 right_key[(int) right_key.size() - 1] += (char) 1;
                 workload.emplace_back(make_pair(left_key, right_key));
-            } else if (workload_difficulty == "medium") {
+            } else if (local_workload_difficulty == "medium") {
                 //medium workload
                 string left_key = workload_seed[i];
                 string right_key = left_key;
                 right_key[(int) right_key.size() / 4] += (char) 1;
 
                 workload.emplace_back(make_pair(left_key, right_key));
-            } else if (workload_difficulty == "hard") {
+            } else if (local_workload_difficulty == "hard") {
                 //hard workload
                 string left_key = workload_seed[i];
                 string right_key = workload_seed[i + 1];
@@ -600,12 +620,33 @@ void eval_trie_heatmap()
 
 }
 
+vector<pair<string, string> > negative_workload;
+
 void eval_rf_heatmap()
 {
+//    for(size_t i = 0; i< dataset.size();i++)
+//    {
+//        cout <<"dataset[i]: " << dataset[i] << endl;
+//    }
+    assert(negative_workload.empty());
+    for(size_t i = 0;i<workload.size();i++) {
+        string left_key = workload[i].first;
+        string right_key = workload[i].second;
+
+        bool ground_truth = contains(dataset, left_key, right_key);
+
+        if (!ground_truth) {
+            negative_workload.push_back(workload[i]);
+//            cout << "negative_query[i] " << workload[i].first <<" " << workload[i].second << endl;
+        }
+
+    }
+
     RichMultiBloom *pq;
     bool do_print = true;
     pq = new RichMultiBloom(dataset, workload, 0.0000000001, -1, do_print);
-    auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
+    auto *rf = new RangeFilterTemplate(dataset, negative_workload, pq, do_print);
+    rf->track_negative_point_queries = true;
 
 
 //    cout << endl;
@@ -619,17 +660,15 @@ void eval_rf_heatmap()
     int true_positives = 0;
     int true_negatives = 0;
 
-    for(size_t i = 0;i<workload.size();i++)
+    for(size_t i = 0;i<negative_workload.size();i++)
     {
-        string left_key = workload[i].first;
-        string right_key = workload[i].second;
+        string left_key = negative_workload[i].first;
+        string right_key = negative_workload[i].second;
 
         bool ground_truth = contains(dataset, left_key, right_key);
 
-        if(ground_truth)
-        {
-            continue;
-        }
+        assert(!ground_truth);
+
 
         bool prediction = rf->query(left_key, right_key);
 
@@ -665,13 +704,15 @@ void eval_rf_heatmap()
         }
     }
 
-    assert(num_false_positives == 0);
+//    assert(num_false_positives == 0);
     assert(num_false_negatives == 0);
 
     cout << "all correct" << endl;
 
     cout << "num negative_point_queries " << rf->get_negative_point_queries() << " num_negatives " << num_negative << endl;
     cout << "num negative_point_queries/num_negatives " << (double) rf->get_negative_point_queries() / num_negative << endl;
+
+    rf->analyze_negative_point_query_density_heatmap(negative_workload);
 
     //TRIE
 //50k
@@ -733,14 +774,14 @@ void eval_rf_heatmap()
 int main() {
 
 //    micro unit tests
-    eval_trie_vs_rf();
-    return 0;
+//    eval_trie_vs_rf();
+//    return 0;
 
     string file_folder;
     string file_name = "10k_dataset.txt";
-    string workload_difficulty = "medium"; //choose from "easy", "medium", "hard", "impossible"
-    string range_filter_type = "hybrid"; // choose from "heatmap", "trie", "surf", "one_bloom", "multi_bloom", "hybrid"
-    string parameter_search_style = "grid_search"; // choose from "no_search", "grid_search", "simulated_annealing"
+    string workload_difficulty = "hybrid"; //choose from "easy", "medium", "hard", "impossible", hybrid
+    string range_filter_type = "heatmap"; // choose from "heatmap", "trie", "surf", "one_bloom", "multi_bloom", "hybrid"
+    string parameter_search_style = "no_search"; // choose from "no_search", "grid_search", "simulated_annealing"
 
     string file_path = file_folder + file_name;
 
@@ -1019,20 +1060,76 @@ void simulated_annealing(ofstream& output_file)
     output_file << "DONE" << endl;
 }
 
-void grid_search(const string& range_filter_type, ofstream& output_file){
+void grid_search(const string& _range_filter_type, ofstream& output_file){
+
+    string range_filter_type = _range_filter_type;
+
+    range_filter_type = "hybrid";
 
     if(range_filter_type == "hybrid")
     {
-        PointQuery* pq;
-        bool do_print = true;
-        pq = new HybridPointQuery(dataset, "midpoint", 5, 12, do_print);
-        auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
-        RangeFilterStats ret = test_range_filter(dataset, workload, rf, do_print);
-        output_file << ret.to_string() << endl;
-        cout << ret.to_string() << endl;
-        cout << "DONE" << endl;
+        int id = 0;
+        int samples = 1800 ;
+        int space = 20*20*24*24;
+        float ratio = (float)samples/space;
+        int samples_taken = 0;
+        Frontier<HybridPointQueryParams> frontier(2);
+        Frontier<MultiBloomParams> multi_bloom_frontier(2);
+        for(int left_cutoff = 1; left_cutoff <= 20; left_cutoff++) {//20
+            for(float left_fpr = 0.001; left_fpr < 0.6; left_fpr = min(left_fpr+0.05, left_fpr*1.5)) {//6
+
+                bool do_print = false;
+
+                for(int right_cutoff = 1; right_cutoff <= 20; right_cutoff++) {//20
+                    for (float right_fpr = 0.001; right_fpr < 0.6; right_fpr = min(right_fpr+0.05, right_fpr * 1.5)) { //6
+                        cout << "ID: " << id++ << endl;
+//                        cout << left_cutoff << " "<< right_cutoff <<" "<< left_fpr <<" "<< right_fpr << endl;
+                        if(rand()%1000 < ratio*1000)
+                        {
+                            cout << samples_taken++ << endl;
+                        }
+                        else
+                        {
+                            continue;
+                        }
+                        PointQuery *pq;
+                        pq = new HybridPointQuery(dataset, "kirk", left_cutoff, left_fpr, right_cutoff, right_fpr, do_print);
+                        auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
+                        RangeFilterStats ret = test_range_filter(dataset, workload, rf, do_print);
+                        HybridPointQueryParams *params = (HybridPointQueryParams *) ret.get_params();
+                        frontier.insert(*(params->clone()), ret.to_vector());
+                        output_file << ret.to_string() << endl;
+                        cout << ret.to_string() << endl;
+                        cout << "DONE" << endl;
+
+                        {
+                            PointQuery *mb_pq = new MultiBloom(dataset, right_fpr, right_cutoff, do_print);
+                            auto *multi_bloom_rf = new RangeFilterTemplate(dataset, workload, mb_pq, do_print);
+                            RangeFilterStats mb_ret = test_range_filter(dataset, workload, multi_bloom_rf, do_print);
+                            MultiBloomParams *mb_params = (MultiBloomParams *) mb_ret.get_params();
+                            multi_bloom_frontier.insert(*(mb_params->clone()), mb_ret.to_vector());
+                        }
+                        {
+                            PointQuery *mb_pq = new MultiBloom(dataset, left_fpr, left_cutoff, do_print);
+                            auto *multi_bloom_rf = new RangeFilterTemplate(dataset, workload, mb_pq, do_print);
+                            RangeFilterStats mb_ret = test_range_filter(dataset, workload, multi_bloom_rf, do_print);
+                            MultiBloomParams *mb_params = (MultiBloomParams *) mb_ret.get_params();
+                            multi_bloom_frontier.insert(*(mb_params->clone()), mb_ret.to_vector());
+                        }
+                    }
+                }
+            }
+        }
+        ofstream frontier_output = ofstream ("hybrid_on_hybrid.txt");
+        frontier.print(frontier_output);
+        frontier_output.close();
+
+        ofstream multi_bloom_frontier_output = ofstream ("multi_bloom_on_hybrid.txt");
+        multi_bloom_frontier.print(multi_bloom_frontier_output);
+        multi_bloom_frontier_output.close();
     }
     else {
+        Frontier<MultiBloomParams> frontier(2);
         for (int cutoff = 0; cutoff < 20; cutoff++) {
 
             const int num_seed_fprs = 10;
@@ -1057,7 +1154,7 @@ void grid_search(const string& range_filter_type, ofstream& output_file){
             };
             for (int seed_fpr_id = 0; seed_fpr_id < num_seed_fprs; seed_fpr_id++) {
                 PointQuery *pq;
-                bool do_print = true;
+                bool do_print = false;
                 if (range_filter_type == "one_bloom") {
                     pq = new OneBloom(dataset, seed_fprs[seed_fpr_id], cutoff, do_print);
                 } else if (range_filter_type == "multi_bloom") {
@@ -1067,6 +1164,11 @@ void grid_search(const string& range_filter_type, ofstream& output_file){
                 }
                 auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
                 RangeFilterStats ret = test_range_filter(dataset, workload, rf, do_print);
+
+                if(range_filter_type == "multi_bloom") {
+                    MultiBloomParams *params = (MultiBloomParams *)ret.get_params();
+                    frontier.insert(*(params->clone()), ret.to_vector());
+                }
                 rf->clear();
                 output_file << ret.to_string() << endl;
                 cout << ret.to_string() << endl;
@@ -1079,6 +1181,10 @@ void grid_search(const string& range_filter_type, ofstream& output_file){
             output_file << endl;
             cout << endl;
         }
+
+        ofstream frontier_output = ofstream ("multi_bloom_on_hybrid.txt");
+        frontier.print(frontier_output);
+        frontier_output.close();
     }
 
 }

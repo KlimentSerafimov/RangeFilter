@@ -80,6 +80,17 @@ public:
         return ret;
     }
 
+    string to_string() const
+    {
+        assert(!is_erased());
+        string ret;
+        for(size_t i = 0;i<score.size();i++)
+        {
+            ret+=std::to_string(score[i])+" ";
+        }
+        return ret;
+    }
+
     bool operator < (const FrontierPoint<ParamsType>& other) const
     {
         assert(other.score.size() == score.size());
@@ -147,6 +158,15 @@ class Frontier
 public:
     explicit Frontier(size_t _num_objectives): num_objectives(_num_objectives){}
 
+    void print(ofstream& out)
+    {
+        remove_erased();
+        for(size_t i = 0;i<frontier.size();i++)
+        {
+            out << frontier[i].to_string() << endl;
+        }
+    }
+
 /**
 
     def insert(self, the_bot, new_point):
@@ -156,7 +176,7 @@ public:
         for obj in new_point:
             assert obj in self.objectives
 */
-    bool insert(ParamsType params, const vector<double>& score)
+    bool insert(const ParamsType& params, const vector<double>& score)
     {
         assert(num_objectives == score.size());
 

@@ -6,7 +6,7 @@
 #define SURF_HYBRIDPOINTQUERY_H
 
 #include <string>
-#include <assert.h>
+#include <cassert>
 #include "RangeFilterMultiBloom.h"
 
 using namespace std;
@@ -14,9 +14,9 @@ using namespace std;
 class HybridPointQueryParams: public PointQueryParams
 {
 protected:
-    size_t n;
+    size_t n = 0;
     vector<string> splits;
-    vector<PointQuery*> sub_point_query_params;
+    vector<PointQueryParams*> sub_point_query_params;
 
     bool invariant() const {
         assert(n >= 1);
@@ -29,7 +29,18 @@ protected:
     }
 
 public:
-    virtual string to_string() const
+    HybridPointQueryParams(): PointQueryParams() {}
+    HybridPointQueryParams(const HybridPointQueryParams& to_copy): n(to_copy.n), splits(to_copy.splits) {
+        for(size_t i = 0;i<sub_point_query_params.size();i++)
+        {
+            sub_point_query_params.push_back(sub_point_query_params[i]->clone());
+        }
+    }
+    virtual HybridPointQueryParams* clone() const override
+    {
+        return new HybridPointQueryParams(*this);
+    }
+    string to_string() const override
     {
         assert(invariant());
         string ret;
@@ -37,7 +48,7 @@ public:
         ret += "splits:\t";
         for(size_t i = 0;i<splits.size();i++)
         {
-            cout << splits[i] <<"; ";
+            ret += splits[i]+"; ";
         }
         ret += "\n";
         max_w = max(max_w, (int)ret.size());
@@ -58,10 +69,12 @@ public:
     }
 };
 
-class HybridPointQuery: public PointQuery, public HybridPointQueryParams {
+class HybridPointQuery: public HybridPointQueryParams, virtual public PointQuery {
 
+    vector<PointQuery*> sub_point_query;
 public:
-    HybridPointQuery(const vector<string>& dataset, const string& midpoint, int left_cutoff, int right_cutoff, bool do_print)
+    HybridPointQuery(const vector<string>& dataset, const string& midpoint, int left_cutoff, float left_fpr, int right_cutoff, float right_fpr, bool do_print):
+           HybridPointQueryParams()
     {
         n = 2;
         splits.push_back(midpoint);
@@ -83,61 +96,66 @@ public:
                 }
                 right_dataset.push_back(dataset[i]);
             }
-        }        if(do_print) {
+        }
+        if(do_print) {
             cout << "LEFT MULTI-BLOOM:" << endl;
         }
-        sub_point_query_params.push_back(new MultiBloom(left_dataset, 0.001, left_cutoff, do_print));
+        sub_point_query.push_back(new MultiBloom(left_dataset, left_fpr, left_cutoff, do_print));
+        sub_point_query_params.push_back(*sub_point_query.rbegin());
         if(do_print) {
             cout << "RIGHT MULTI-BLOOM" << endl;
         }
-        sub_point_query_params.push_back(new MultiBloom(right_dataset, 0.001, right_cutoff, do_print));
+        sub_point_query.push_back(new MultiBloom(right_dataset, right_fpr, right_cutoff, do_print));
+        sub_point_query_params.push_back(*sub_point_query.rbegin());
         if(do_print) {
             cout << "DONE HYBRID CONSTRUCTION." << endl;
         }
         assert(invariant());
     }
 
-    virtual bool contains(string s)
+    HybridPointQueryParams* clone() const override{
+        return HybridPointQueryParams::clone();
+    }
+
+    bool contains(string s) override
     {
         assert(invariant());
         bool found = false;
         bool ret = false;
-        int id = -1;
         for(size_t i = 0;i<splits.size();i++) {
             if(splits[i] > s) {
-                ret = sub_point_query_params[i]->contains(s);
+                ret = sub_point_query[i]->contains(s);
                 found = true;
-                id = i;
                 break;
             }
         }
         if(!found)
         {
-            ret = sub_point_query_params[splits.size()]->contains(s);
+            ret = sub_point_query[splits.size()]->contains(s);
             found = true;
-            id = splits.size();
         }
+        assert(found);
         return ret;
     }
 
-    virtual void insert(string s)
+    void insert(string s) override
     {
         assert(invariant());
         for(size_t i = 0;i<splits.size();i++) {
             if(splits[i] > s) {
-                sub_point_query_params[i]->insert(s);
+                sub_point_query[i]->insert(s);
                 return;
             }
         }
-        sub_point_query_params[splits.size()]->insert(s);
+        sub_point_query[splits.size()]->insert(s);
     }
 
-    virtual unsigned long long get_memory() {
+    unsigned long long get_memory() override {
         assert(invariant());
         unsigned long long ret = 0;
         for(size_t i = 0;i<sub_point_query_params.size();i++)
         {
-            ret+=sub_point_query_params[i]->get_memory();
+            ret+=sub_point_query[i]->get_memory();
         }
         for(size_t i =0;i<splits.size();i++)
         {
@@ -146,15 +164,20 @@ public:
         return ret;
     }
 
-    virtual void clear() {
+    void clear() override {
         for(size_t i = 0;i<sub_point_query_params.size();i++) {
-            sub_point_query_params[i]->clear();
+            sub_point_query[i]->clear();
         }
         sub_point_query_params.clear();
         for(size_t i =0;i<splits.size();i++) {
             splits[i].clear();
         }
         splits.clear();
+    }
+
+    string to_string() const override
+    {
+        return HybridPointQueryParams::to_string();
     }
 };
 
