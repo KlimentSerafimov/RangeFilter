@@ -17,13 +17,13 @@ using namespace std;
 
 class Trie {
 
-    bool isleaf;
+    bool isleaf = false;
     Trie* parent = nullptr;
     Trie *character[CHAR_SIZE]{};
 
-    char last_char;
-    char init_char;
-    int max_length;
+    char last_char = 0;
+    char init_char = 0;
+    int max_length = 0;
 
     int count_ret_false = 0;
 
@@ -37,6 +37,27 @@ class Trie {
     }
 
 public:
+
+    void clear()
+    {
+        for(int i = 0; i< CHAR_SIZE; i++)
+        {
+            if(character[i] != nullptr)
+            {
+                character[i]->clear();
+                character[i] = nullptr;
+            }
+        }
+        isleaf = false;
+        parent = nullptr;
+
+        last_char = 0;
+        init_char = 0;
+        max_length = 0;
+
+        count_ret_false = 0;
+        delete this;
+    }
 
     int sum_count_ret_false()
     {
@@ -72,13 +93,13 @@ public:
 private:
 public:
     bool deletion(Trie*&, string);
-    bool search(string x);
+    bool contains(string key);
     bool query(string x, string y);
     bool haveChildren(Trie const* p);
 
     void insert(string basicString);
 
-    explicit Trie(vector<string> dataset): Trie()
+    explicit Trie(const vector<string>& dataset): Trie()
     {
 
         last_char = (char)0;

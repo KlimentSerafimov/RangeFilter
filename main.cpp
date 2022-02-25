@@ -624,95 +624,124 @@ vector<pair<string, string> > negative_workload;
 
 void eval_rf_heatmap()
 {
-//    for(size_t i = 0; i< dataset.size();i++)
-//    {
-//        cout <<"dataset[i]: " << dataset[i] << endl;
-//    }
-    assert(negative_workload.empty());
-    for(size_t i = 0;i<workload.size();i++) {
-        string left_key = workload[i].first;
-        string right_key = workload[i].second;
+    while(true) {
+        PointQuery *ground_truth_point_query = new GroundTruthPointQuery(dataset);
+        RangeFilterTemplate ground_truth = RangeFilterTemplate(dataset, workload, ground_truth_point_query, false);
 
-        bool ground_truth = contains(dataset, left_key, right_key);
+        string best_split = ground_truth.analyze_negative_point_query_density_heatmap(workload);
 
-        if (!ground_truth) {
-            negative_workload.push_back(workload[i]);
-//            cout << "negative_query[i] " << workload[i].first <<" " << workload[i].second << endl;
+        vector<pair<string, string> > left_workload;
+        vector<pair<string, string> > right_workload;
+
+        for (int i = 0; i < ground_truth.negative_workload.size(); i++) {
+            if (workload[i].second <= best_split) {
+                left_workload.push_back(workload[i]);
+            } else {
+                right_workload.push_back(workload[i]);
+            }
         }
 
-    }
+        cout << left_workload.size() << endl;
+        cout << right_workload.size() << endl;
 
-    RichMultiBloom *pq;
-    bool do_print = true;
-    pq = new RichMultiBloom(dataset, workload, 0.0000000001, -1, do_print);
-    auto *rf = new RangeFilterTemplate(dataset, negative_workload, pq, do_print);
-    rf->track_negative_point_queries = true;
-
-
-//    cout << endl;
-//    cout << "trie bpk " << (double)(trie.get_memory()*8)/(double)dataset.size() << endl;
-
-    int num_positive = 0;
-    int num_negative = 0;
-    int num_false_positives = 0;
-    int num_false_negatives = 0;
-
-    int true_positives = 0;
-    int true_negatives = 0;
-
-    for(size_t i = 0;i<negative_workload.size();i++)
-    {
-        string left_key = negative_workload[i].first;
-        string right_key = negative_workload[i].second;
-
-        bool ground_truth = contains(dataset, left_key, right_key);
-
-        assert(!ground_truth);
-
-
-        bool prediction = rf->query(left_key, right_key);
-
-        if(ground_truth)
-        {
-            num_positive+=1;
-            if(!prediction)
-            {
-                num_false_negatives+=1;
-                assert(false);
-            }
-            else
-            {
-                true_positives+=1;
-            }
+        if(left_workload.size() >= right_workload.size()) {
+            workload = left_workload;
         }
         else
         {
-            num_negative+=1;
-            if(prediction)
-            {
-                num_false_positives +=1;
-            }
-            else
-            {
-                true_negatives += 1;
-            }
+            workload = right_workload;
         }
 
-        if((i+1)%1000000 == 0)
-        {
-            cout << "tested " << i+1 << "/" << workload.size() << endl;
-        }
+//        break;
+
+//        if(left_workload.size() >= right_workload.size()) {
+//
+//            RangeFilterTemplate *ground_truth_left = new RangeFilterTemplate(dataset, left_workload,
+//                                                                             ground_truth_point_query,
+//                                                                             false);
+//            string best_left_split = ground_truth_left->analyze_negative_point_query_density_heatmap(left_workload);
+//        }
+//        else
+//        {
+//            RangeFilterTemplate *ground_truth_right = new RangeFilterTemplate(dataset, right_workload,
+//                                                                              ground_truth_point_query,
+//                                                                              false);
+//            string best_right_split = ground_truth_right->analyze_negative_point_query_density_heatmap(right_workload);
+//        }
+
     }
-
-//    assert(num_false_positives == 0);
-    assert(num_false_negatives == 0);
-
-    cout << "all correct" << endl;
-
-    cout << "num negative_point_queries " << rf->get_negative_point_queries() << " num_negatives " << num_negative << endl;
-    cout << "num negative_point_queries/num_negatives " << (double) rf->get_negative_point_queries() / num_negative << endl;
-
-    rf->analyze_negative_point_query_density_heatmap(negative_workload);
+//
+//    RichMultiBloom *pq;
+//    bool do_print = true;
+//    pq = new RichMultiBloom(dataset, workload, 0.0000000001, -1, do_print);
+//    auto *rf = new RangeFilterTemplate(dataset, negative_workload, pq, do_print);
+//    rf->track_negative_point_queries = true;
+//
+//
+////    cout << endl;
+////    cout << "trie bpk " << (double)(trie.get_memory()*8)/(double)dataset.size() << endl;
+//
+//    int num_positive = 0;
+//    int num_negative = 0;
+//    int num_false_positives = 0;
+//    int num_false_negatives = 0;
+//
+//    int true_positives = 0;
+//    int true_negatives = 0;
+//
+//    for(size_t i = 0;i<negative_workload.size();i++)
+//    {
+//        string left_key = negative_workload[i].first;
+//        string right_key = negative_workload[i].second;
+//
+//        bool ground_truth = contains(dataset, left_key, right_key);
+//
+//        assert(!ground_truth);
+//
+//
+//        bool prediction = rf->query(left_key, right_key);
+//
+//        if(ground_truth)
+//        {
+//            num_positive+=1;
+//            if(!prediction)
+//            {
+//                num_false_negatives+=1;
+//                assert(false);
+//            }
+//            else
+//            {
+//                true_positives+=1;
+//            }
+//        }
+//        else
+//        {
+//            num_negative+=1;
+//            if(prediction)
+//            {
+//                num_false_positives +=1;
+//            }
+//            else
+//            {
+//                true_negatives += 1;
+//            }
+//        }
+//
+//        if((i+1)%1000000 == 0)
+//        {
+//            cout << "tested " << i+1 << "/" << workload.size() << endl;
+//        }
+//    }
+//
+////    assert(num_false_positives == 0);
+//    assert(num_false_negatives == 0);
+//
+//    cout << "all correct" << endl;
+//
+//    cout << "num negative_point_queries " << rf->get_negative_point_queries() << " num_negatives " << num_negative << endl;
+//    cout << "num negative_point_queries/num_negatives " << (double) rf->get_negative_point_queries() / num_negative << endl;
+//
+//    rf->analyze_negative_point_query_density_heatmap(negative_workload);
 
     //TRIE
 //50k

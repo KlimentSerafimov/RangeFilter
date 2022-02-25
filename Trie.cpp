@@ -26,7 +26,7 @@ void Trie::insert(string key){
 
 
 // search a key in Trie
-bool Trie::search(string key){
+bool Trie::contains(string key){
     Trie *curr = this;
     for (int i = 0; i < (int)key.length(); i++){
         // go to the next node
@@ -100,7 +100,7 @@ bool Trie::query(string left, string right) {
 
         }
         else {
-            string right_rec;
+            string right_rec = "";
             string left_rec = left.substr(1, left.size() - 1);
             if (left_rec.empty()) {
                 if(character[(int)left[0]]->isleaf)

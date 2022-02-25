@@ -12,10 +12,38 @@
 #include <iostream>
 #include <cassert>
 #include "PointQuery.h"
+#include "Trie.h"
 #include <map>
 #include <fstream>
 
 using namespace std;
+
+class GroundTruthPointQuery: public PointQuery
+{
+public:
+    Trie* trie;
+    GroundTruthPointQuery(const vector<string>& dataset): trie(new Trie(dataset)) {}
+
+    bool contains(string s) override
+    {
+        return trie->contains(s);
+    }
+
+    virtual void insert(string s)
+    {
+        trie->insert(s);
+    }
+
+    virtual unsigned long long get_memory() {
+        return trie->get_memory();
+    }
+
+    virtual void clear()
+    {
+        trie->clear();
+    }
+
+};
 
 class RangeFilterTemplate
 {
@@ -94,6 +122,10 @@ class RangeFilterTemplate
     }
 
 public:
+    ~RangeFilterTemplate(){
+        pq->clear();
+        delete pq;
+    }
     bool track_negative_point_queries = false;
 private:
     map<string, int> prefix_to_negative_point_queries;
@@ -367,7 +399,30 @@ public:
         return negative_point_queries;
     }
 
-    void analyze_negative_point_query_density_heatmap(const vector<pair<string, string> >& negative_workload) {
+    vector<pair<string, string> > negative_workload;
+    string analyze_negative_point_query_density_heatmap(const vector<pair<string, string> >& workload) {
+        assert(!track_negative_point_queries);
+
+        for(size_t i = 0;i<workload.size();i++) {
+            string left_key = workload[i].first;
+            string right_key = workload[i].second;
+
+            bool ret = query(left_key, right_key);
+            assert(ret == ((GroundTruthPointQuery*)pq)->trie->query(left_key, right_key));
+
+            if (!ret) {
+                negative_workload.push_back(workload[i]);
+            }
+        }
+
+        cout << "|negative_workload| = " << negative_workload.size() << endl;
+
+        track_negative_point_queries = true;
+
+        for(const auto& it: negative_workload) {
+            assert(query(it.first, it.second) == false);
+        }
+
         assert(track_negative_point_queries);
 
         vector<pair<string, string> > inits;
@@ -411,10 +466,10 @@ public:
                 }
                 at_init+=1;
             }
-            while(at_end < ends.size() && ends[at_end].first < array[i].first ||
+            while(at_end < ends.size() && ((ends[at_end].first < array[i].first) ||
                     (ends[at_end].first > array[i].first && (
                        ends[at_end].first.size() > array[i].first.size() &&
-                       ends[at_end].first.substr(0, array[i].first.size()) == array[i].first)))
+                       ends[at_end].first.substr(0, array[i].first.size()) == array[i].first))))
             {
                 at_end+=1;
             }
@@ -423,23 +478,38 @@ public:
                 assert(ends[at_end].second > array[i].first);
             }
 
-            float left_density = (float)prefix_sum/at_init;
-            float right_density = (float)(sum-prefix_sum)/(inits.size()-at_init);
+            if((inits.size()-at_init-1) == 0)
+            {
+                continue;
+            }
+
+            float left_density = (float)prefix_sum/(at_init+1);
+            float right_density = (float)(sum-prefix_sum)/(inits.size()-at_init-1);
 
 
             densities.emplace_back(left_density,right_density);
 //            cout <<at_init <<" "<< left_density <<" "<< right_density << endl;
 
-            float score = right_density/left_density;
+
+            if(right_density == 0 || left_density == 0)
+            {
+                continue;
+            }
+
+            float score = max(right_density/left_density, left_density/right_density);
             out << at_init << " "<< score << endl;
 
             if(at_init < inits.size())
-            best_split = max(best_split, make_pair(score, inits[at_init].first));
+            best_split = max(best_split, make_pair(score, inits[at_init].second));
+
+
 
         }
         out.close();
 
         cout << best_split.first <<" "<< best_split.second << endl;
+
+        return best_split.second;
     }
 };
 
