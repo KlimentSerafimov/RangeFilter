@@ -59,15 +59,65 @@ public:
 };
 
 class HybridPointQuery: public PointQuery, public HybridPointQueryParams {
+
+public:
+    HybridPointQuery(const vector<string>& dataset, const string& midpoint, int left_cutoff, int right_cutoff, bool do_print)
+    {
+        n = 2;
+        splits.push_back(midpoint);
+        vector<string> left_dataset;
+        vector<string> right_dataset;
+        for(size_t i = 0;i<dataset.size();i++)
+        {
+            if(dataset[i] < midpoint) {
+                left_dataset.push_back(dataset[i]);
+            }
+            else {
+                for(size_t j = dataset[i].size()-1;j>=1;j--)
+                {
+                    if(dataset[i].substr(0, j) < midpoint)
+                    {
+                        left_dataset.push_back(dataset[i].substr(0, j));
+                        break;
+                    }
+                }
+                right_dataset.push_back(dataset[i]);
+            }
+        }        if(do_print) {
+            cout << "LEFT MULTI-BLOOM:" << endl;
+        }
+        sub_point_query_params.push_back(new MultiBloom(left_dataset, 0.001, left_cutoff, do_print));
+        if(do_print) {
+            cout << "RIGHT MULTI-BLOOM" << endl;
+        }
+        sub_point_query_params.push_back(new MultiBloom(right_dataset, 0.001, right_cutoff, do_print));
+        if(do_print) {
+            cout << "DONE HYBRID CONSTRUCTION." << endl;
+        }
+        assert(invariant());
+    }
+
     virtual bool contains(string s)
     {
         assert(invariant());
+        bool found = false;
+        bool ret = false;
+        int id = -1;
         for(size_t i = 0;i<splits.size();i++) {
             if(splits[i] > s) {
-                return sub_point_query_params[i]->contains(s);
+                ret = sub_point_query_params[i]->contains(s);
+                found = true;
+                id = i;
+                break;
             }
         }
-        return sub_point_query_params[splits.size()]->contains(s);
+        if(!found)
+        {
+            ret = sub_point_query_params[splits.size()]->contains(s);
+            found = true;
+            id = splits.size();
+        }
+        return ret;
     }
 
     virtual void insert(string s)
@@ -76,9 +126,10 @@ class HybridPointQuery: public PointQuery, public HybridPointQueryParams {
         for(size_t i = 0;i<splits.size();i++) {
             if(splits[i] > s) {
                 sub_point_query_params[i]->insert(s);
+                return;
             }
         }
-        sub_point_query_params[splits.size()]->contains(s);
+        sub_point_query_params[splits.size()]->insert(s);
     }
 
     virtual unsigned long long get_memory() {

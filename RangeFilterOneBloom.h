@@ -37,7 +37,7 @@ class OneBloom: public PointQuery
     double seed_fpr;
     int cutoff;
 
-    void calc_metadata(const vector<string>& dataset, const vector<pair<string, string> >& workload, bool do_print)
+    void calc_metadata(const vector<string>& dataset, bool do_print)
     {
         total_num_chars = 0;
 
@@ -63,9 +63,9 @@ class OneBloom: public PointQuery
 
 public:
 
-    OneBloom(const vector<string>& dataset, const vector<pair<string, string> >& workload, double _seed_fpr, int _cutoff, bool do_print = false):
+    OneBloom(const vector<string>& dataset, double _seed_fpr, int _cutoff, bool do_print = false):
     seed_fpr(_seed_fpr), cutoff(_cutoff){
-        calc_metadata(dataset, workload, do_print);
+        calc_metadata(dataset, do_print);
         if(total_num_chars > 0) {
             bloom_parameters params = get_bloom_parameters(total_num_chars, seed_fpr);
             bf = bloom_filter(params);

@@ -97,7 +97,7 @@ protected:
     vector<pair<int, double> > params;
 private:
 
-    void calc_metadata(const vector<string>& dataset, const vector<pair<string, string> >& workload, bool do_print)
+    void calc_metadata(const vector<string>& dataset, bool do_print)
     {
         const int calc_unique_prefixes_lvl = 9;
 
@@ -134,7 +134,7 @@ private:
             }
         }
 
-        for(int i = 0;i<calc_unique_prefixes_lvl;i++)
+        for(int i = 0;i<min(calc_unique_prefixes_lvl, (int)num_prefixes_per_level.size());i++)
         {
             num_prefixes_per_level[i] = min(num_prefixes_per_level[i], (int)unique_prefixes_per_level[i].size());
         }
@@ -161,7 +161,7 @@ protected:
         size_t max_lvl = params.size();
         if(cutoff != -1)
         {
-            assert(max_lvl == (size_t)cutoff);
+            assert(max_lvl <= (size_t)cutoff);
         }
         assert(bfs.empty());
         for(size_t i = 0;i<max_lvl;i++)
@@ -175,16 +175,21 @@ public:
 
     MultiBloom()= default;
 
-    MultiBloom(const vector<string>& dataset, const vector<pair<string, string> >& workload, double _seed_fpr, int _cutoff = -1, bool do_print = false):
+    MultiBloom(const vector<string>& dataset, double _seed_fpr, int _cutoff = -1, bool do_print = false):
     seed_fpr(_seed_fpr), cutoff(_cutoff){
-        calc_metadata(dataset, workload, do_print);
+        for(int i = 0;i<dataset.size();i++)
+        {
+            cout << dataset[i] << endl;
+        }
+        calc_metadata(dataset, do_print);
         size_t max_lvl = num_prefixes_per_level.size();
         if(cutoff != -1)
         {
-            max_lvl = (size_t)cutoff;
+            max_lvl = min(max_lvl, (size_t)cutoff);
         }
+        size_t min_num_elements = 4;
         for(size_t i = 0;i<max_lvl;i++){
-            params.emplace_back(num_prefixes_per_level[i], seed_fpr);
+            params.emplace_back(num_prefixes_per_level[i]+min_num_elements, seed_fpr);
         }
 
         init();
@@ -254,7 +259,7 @@ class RichMultiBloom: public MultiBloom {
 public:
     RichMultiBloom(const vector<string> &_dataset, const vector<pair<string, string> > &workload, double _seed_fpr,
                    int _cutoff = -1, bool do_print = false) :
-            MultiBloom(_dataset, workload, _seed_fpr, _cutoff, do_print), dataset(_dataset) {
+            MultiBloom(_dataset, _seed_fpr, _cutoff, do_print), dataset(_dataset) {
 
     };
 

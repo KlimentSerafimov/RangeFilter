@@ -10,6 +10,7 @@
 #include "RangeFilterMultiBloom.h"
 #include "surf/surf_implementation.h"
 #include "Trie.h"
+#include "HybridPointQuery.h"
 
 using namespace std;
 
@@ -32,47 +33,76 @@ void eval_trie_vs_rf()
     }
 
 
-    vector<pair<string, string> > queries;
-    queries.emplace_back(make_pair("aaaa", "aaab"));
-    queries.emplace_back(make_pair("aaaa", "aaac"));
-    queries.emplace_back(make_pair("aaabbb", "aaabbb"));
-    queries.emplace_back(make_pair("aaabbc", "aaaqqp"));
-    queries.emplace_back(make_pair("aaaqqp", "aaaqqq"));
-    queries.emplace_back(make_pair("aaaqqq", "aaaqqq"));
-    queries.emplace_back(make_pair("aaaqqq", "aaaqqr"));
-    queries.emplace_back(make_pair("aaaqqp", "aaaqqr"));
-    queries.emplace_back(make_pair("aaaqqr", "aaaqqz"));
-    queries.emplace_back(make_pair("aaaqqr", "aaaqqy"));
-    queries.emplace_back(make_pair("aaaqqr", "aaazzz"));
-    queries.emplace_back(make_pair("aaaqqr", "aaazzy"));
-    queries.emplace_back(make_pair("aaaqqr", "aaazyz"));
-    queries.emplace_back(make_pair("aaaqqr", "aaayzz"));
-    queries.emplace_back(make_pair("aaaqqr", "aaayzz"));
-    queries.emplace_back(make_pair("aa", "ab"));
-    queries.emplace_back(make_pair("a", "aaabba"));
-    queries.emplace_back(make_pair("a", "aaabbb"));
-    queries.emplace_back(make_pair("a", "aaazzz"));
-    queries.emplace_back(make_pair("aaabbc", "aaabbc"));
-    queries.emplace_back(make_pair("aaaab", "aaaz"));
-    queries.emplace_back(make_pair("aaac", "aaaz"));
-    queries.emplace_back(make_pair("aac", "aacz"));
-    queries.emplace_back(make_pair("aaabbba", "aaaqqp"));
-    queries.emplace_back(make_pair("aaaqqp", "aaaqqqa"));
-    queries.emplace_back(make_pair("aaaff", "aaaff"));
-    queries.emplace_back(make_pair("cbb", "ddd"));
-    queries.emplace_back(make_pair("bbb", "cdd"));
+    vector<pair<string, string> > workload;
+    workload.emplace_back(make_pair("aaaqqr", "aaaqqz"));
+    workload.emplace_back(make_pair("aaaa", "aaab"));
+    workload.emplace_back(make_pair("aaaa", "aaac"));
+    workload.emplace_back(make_pair("aaabbb", "aaabbb"));
+    workload.emplace_back(make_pair("aaabbc", "aaaqqp"));
+    workload.emplace_back(make_pair("aaaqqp", "aaaqqq"));
+    workload.emplace_back(make_pair("aaaqqq", "aaaqqq"));
+    workload.emplace_back(make_pair("aaaqqq", "aaaqqr"));
+    workload.emplace_back(make_pair("aaaqqp", "aaaqqr"));
+    workload.emplace_back(make_pair("aaaqqr", "aaaqqy"));
+    workload.emplace_back(make_pair("aaaqqr", "aaazzz"));
+    workload.emplace_back(make_pair("aaaqqr", "aaazzy"));
+    workload.emplace_back(make_pair("aaaqqr", "aaazyz"));
+    workload.emplace_back(make_pair("aaaqqr", "aaayzz"));
+    workload.emplace_back(make_pair("aaaqqr", "aaayzz"));
+    workload.emplace_back(make_pair("aa", "ab"));
+    workload.emplace_back(make_pair("a", "aaabba"));
+    workload.emplace_back(make_pair("a", "aaabbb"));
+    workload.emplace_back(make_pair("a", "aaazzz"));
+    workload.emplace_back(make_pair("aaazzz", "aaazzz"));
+    workload.emplace_back(make_pair("aaabbc", "aaabbc"));
+    workload.emplace_back(make_pair("aaaab", "aaaz"));
+    workload.emplace_back(make_pair("aaac", "aaaz"));
+    workload.emplace_back(make_pair("aac", "aacz"));
+    workload.emplace_back(make_pair("aaabbba", "aaaqqp"));
+    workload.emplace_back(make_pair("aaaqqp", "aaaqqqa"));
+    workload.emplace_back(make_pair("aaaff", "aaaff"));
+    workload.emplace_back(make_pair("cbb", "ddd"));
+    workload.emplace_back(make_pair("bbb", "cdd"));
 
-    auto* multi_bloom = new MultiBloom(dataset, queries, 0.0001, -1, true);
-    RangeFilterTemplate rf(dataset, queries, multi_bloom, true);
+    bool do_print = true;
+
+    size_t max_query_len = 0;
+    for(int i = 0;i<workload.size();i++)
+    {
+        max_query_len = max(max_query_len, workload[i].first.size());
+        max_query_len = max(max_query_len, workload[i].second.size());
+    }
+
+//    auto* multi_bloom = new MultiBloom(dataset, 0.0001, -1, do_print);
+//    RangeFilterTemplate* rf = new RangeFilterTemplate(dataset, workload, multi_bloom, do_print);
+
+    auto* pq = new HybridPointQuery(dataset, "aaazzz", -1, -1, do_print);
+    auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
 
     cout << "start eval" << endl;
-    for(auto q: queries)
+    for(const auto& q: workload)
     {
         cout << q.first <<" "<< q.second << endl;
         bool trie_out = trie.query(q.first, q.second);
-        bool rf_out = rf.query(q.first, q.second);
+        bool rf_out = rf->query(q.first, q.second);
         cout <<trie_out <<" "<< rf_out << endl;
-        assert(trie_out == rf_out);
+        if(trie_out == rf_out)
+        {
+            cout << "OK" << endl;
+        }
+        else
+        {
+//            cout << "WRONG" << endl;
+            if(trie_out)
+            {
+                cout << "FALSE NEGATIVE" << endl;
+            }
+            else
+            {
+                cout << "FALSE POSITIVE" << endl;
+            }
+            assert(false);
+        }
     }
 
     cout << "done" << endl;
@@ -702,6 +732,9 @@ void eval_rf_heatmap()
 
 int main() {
 
+//    micro unit tests
+    eval_trie_vs_rf();
+    return 0;
 
     string file_folder;
     string file_name = "10k_dataset.txt";
@@ -738,9 +771,6 @@ int main() {
         eval_trie_heatmap();
         return 0;
     }
-//    micro unit tests
-//    eval_trie_vs_rf();
-//    return 0;
 
 //    test_bloom_filter();
 //    return 0;
@@ -752,17 +782,19 @@ int main() {
 
     prep_dataset_and_workload(file_path, workload_difficulty);
 
-    ofstream output_file = ofstream ("results.out");
 
     if(parameter_search_style == "grid_search") {
+        ofstream output_file = ofstream ("results__grid_search.out");
         grid_search(range_filter_type, output_file);
+        output_file.close();
     }
     else {
+        ofstream output_file = ofstream ("results__simulated_annealing.out");
         assert(range_filter_type == "multi_bloom");
         simulated_annealing(output_file);
+        output_file.close();
     }
 
-    output_file.close();
 
     return 0;
 }
@@ -989,52 +1021,64 @@ void simulated_annealing(ofstream& output_file)
 
 void grid_search(const string& range_filter_type, ofstream& output_file){
 
-    for(int cutoff = 0; cutoff < 20; cutoff++) {
+    if(range_filter_type == "hybrid")
+    {
+        PointQuery* pq;
+        bool do_print = true;
+        pq = new HybridPointQuery(dataset, "midpoint", 5, 12, do_print);
+        auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
+        RangeFilterStats ret = test_range_filter(dataset, workload, rf, do_print);
+        output_file << ret.to_string() << endl;
+        cout << ret.to_string() << endl;
+        cout << "DONE" << endl;
+    }
+    else {
+        for (int cutoff = 0; cutoff < 20; cutoff++) {
 
-        const int num_seed_fprs = 10;
-        float seed_fprs[num_seed_fprs] = {
+            const int num_seed_fprs = 10;
+            float seed_fprs[num_seed_fprs] = {
 //                0.0000001,
 //                0.000001,
 //                0.00001,
 //                0.0001,
-                0.001,
-                0.005,
-                0.01,
-                0.05,
-                0.1,
-                0.2,
-                0.3,
-                0.4,
-                0.5,
-                0.6,
+                    0.001,
+                    0.005,
+                    0.01,
+                    0.05,
+                    0.1,
+                    0.2,
+                    0.3,
+                    0.4,
+                    0.5,
+                    0.6,
 //                0.7,
 //                0.8,
 //                0.9,
-        };
-        for (int seed_fpr_id = 0; seed_fpr_id < num_seed_fprs; seed_fpr_id++) {
-            PointQuery *pq;
-            bool do_print = true;
-            if (range_filter_type == "one_bloom") {
-                pq = new OneBloom(dataset, workload, seed_fprs[seed_fpr_id], cutoff, do_print);
-            } else if (range_filter_type == "multi_bloom") {
-                pq = new MultiBloom(dataset, workload, seed_fprs[seed_fpr_id], cutoff, do_print);
-            } else {
-                assert(false);
+            };
+            for (int seed_fpr_id = 0; seed_fpr_id < num_seed_fprs; seed_fpr_id++) {
+                PointQuery *pq;
+                bool do_print = true;
+                if (range_filter_type == "one_bloom") {
+                    pq = new OneBloom(dataset, seed_fprs[seed_fpr_id], cutoff, do_print);
+                } else if (range_filter_type == "multi_bloom") {
+                    pq = new MultiBloom(dataset, seed_fprs[seed_fpr_id], cutoff, do_print);
+                } else {
+                    assert(false);
+                }
+                auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
+                RangeFilterStats ret = test_range_filter(dataset, workload, rf, do_print);
+                rf->clear();
+                output_file << ret.to_string() << endl;
+                cout << ret.to_string() << endl;
+                if (ret.false_positive_rate() > 0.5) {
+                    output_file << "fpr too large; break;" << endl;
+                    cout << "fpr too large; break;" << endl;
+                    break;
+                }
             }
-            auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
-            RangeFilterStats ret = test_range_filter(dataset, workload, rf, do_print);
-            rf->clear();
-            output_file << ret.to_string() << endl;
-            cout << ret.to_string() << endl;
-            if(ret.false_positive_rate() > 0.5)
-            {
-                output_file << "fpr too large; break;" << endl;
-                cout << "fpr too large; break;" << endl;
-                break;
-            }
+            output_file << endl;
+            cout << endl;
         }
-        output_file << endl;
-        cout << endl;
     }
 
 }
