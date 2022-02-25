@@ -23,6 +23,8 @@ void eval_trie_vs_rf()
     dataset.emplace_back("aaaff");
     dataset.emplace_back("ccc");
 
+    sort(dataset.begin(), dataset.end());
+
 
     Trie trie(dataset);
 
@@ -69,8 +71,15 @@ void eval_trie_vs_rf()
 //    auto* multi_bloom = new MultiBloom(dataset, 0.0001, -1, do_print);
 //    RangeFilterTemplate* rf = new RangeFilterTemplate(dataset, workload, multi_bloom, do_print);
 
-    auto* pq = new HybridPointQuery(dataset, "aaazzz", -1, 0.001, -1, 0.001, do_print);
-    auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
+//    auto* pq = new HybridPointQuery(dataset, "aaazzz", -1, 0.001, -1, 0.001, do_print);
+//    auto *rf = new RangeFilterTemplate(dataset, workload, pq, do_print);
+
+
+    PointQuery *ground_truth_point_query = new GroundTruthPointQuery();
+    RangeFilterTemplate* rf = new RangeFilterTemplate(dataset, workload, ground_truth_point_query, false);
+
+    string best_split = rf->analyze_negative_point_query_density_heatmap(dataset, workload);
+
 
     cout << "start eval" << endl;
     for(const auto& q: workload)
@@ -622,52 +631,51 @@ void eval_trie_heatmap()
 
 vector<pair<string, string> > negative_workload;
 
+
+#include <queue>
+
 void eval_rf_heatmap()
 {
-    while(true) {
-        PointQuery *ground_truth_point_query = new GroundTruthPointQuery(dataset);
-        RangeFilterTemplate ground_truth = RangeFilterTemplate(dataset, workload, ground_truth_point_query, false);
+    priority_queue<pair<int, vector<pair<string, string> > > > workloads;
 
-        string best_split = ground_truth.analyze_negative_point_query_density_heatmap(workload);
+    workloads.push(make_pair(workloads.size(), workload));
+
+    while(!workloads.empty()) {
+
+        int sz = workloads.top().first;
+        cout << "SZ: " << sz << endl;
+        vector<pair<string, string> > local_workload = workloads.top().second;
+        workloads.pop();
+
+        PointQuery *ground_truth_point_query = new GroundTruthPointQuery();
+        RangeFilterTemplate ground_truth = RangeFilterTemplate(dataset, local_workload, ground_truth_point_query, false);
+
+        string best_split = ground_truth.analyze_negative_point_query_density_heatmap(dataset, local_workload);
+        cout << endl;
+
+//        return;
+
+        if(ground_truth.negative_workload.size() <= 1)
+        {
+            continue;
+        }
 
         vector<pair<string, string> > left_workload;
         vector<pair<string, string> > right_workload;
 
         for (int i = 0; i < ground_truth.negative_workload.size(); i++) {
-            if (workload[i].second <= best_split) {
-                left_workload.push_back(workload[i]);
+            if (local_workload[i].second <= best_split) {
+                left_workload.push_back(local_workload[i]);
             } else {
-                right_workload.push_back(workload[i]);
+                right_workload.push_back(local_workload[i]);
             }
         }
 
         cout << left_workload.size() << endl;
         cout << right_workload.size() << endl;
 
-        if(left_workload.size() >= right_workload.size()) {
-            workload = left_workload;
-        }
-        else
-        {
-            workload = right_workload;
-        }
-
-//        break;
-
-//        if(left_workload.size() >= right_workload.size()) {
-//
-//            RangeFilterTemplate *ground_truth_left = new RangeFilterTemplate(dataset, left_workload,
-//                                                                             ground_truth_point_query,
-//                                                                             false);
-//            string best_left_split = ground_truth_left->analyze_negative_point_query_density_heatmap(left_workload);
-//        }
-//        else
-//        {
-//            RangeFilterTemplate *ground_truth_right = new RangeFilterTemplate(dataset, right_workload,
-//                                                                              ground_truth_point_query,
-//                                                                              false);
-//            string best_right_split = ground_truth_right->analyze_negative_point_query_density_heatmap(right_workload);
-//        }
+        workloads.push(make_pair(left_workload.size(), left_workload));
+        workloads.push(make_pair(right_workload.size(), right_workload));
 
     }
 //

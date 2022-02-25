@@ -22,7 +22,7 @@ class GroundTruthPointQuery: public PointQuery
 {
 public:
     Trie* trie;
-    GroundTruthPointQuery(const vector<string>& dataset): trie(new Trie(dataset)) {}
+    GroundTruthPointQuery(): trie(new Trie()) {}
 
     bool contains(string s) override
     {
@@ -399,8 +399,24 @@ public:
         return negative_point_queries;
     }
 
+    static bool static_contains(const vector<string>& dataset, const string& left, const string& right)
+    {
+        auto at = lower_bound(dataset.begin(), dataset.end(), left);
+        if(at == dataset.end())
+        {
+            return false;
+        }
+        if(*at > right)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+
     vector<pair<string, string> > negative_workload;
-    string analyze_negative_point_query_density_heatmap(const vector<pair<string, string> >& workload) {
+    string analyze_negative_point_query_density_heatmap(const vector<string>& dataset, const vector<pair<string, string> >& workload) {
         assert(!track_negative_point_queries);
 
         for(size_t i = 0;i<workload.size();i++) {
@@ -408,7 +424,7 @@ public:
             string right_key = workload[i].second;
 
             bool ret = query(left_key, right_key);
-            assert(ret == ((GroundTruthPointQuery*)pq)->trie->query(left_key, right_key));
+            assert(static_contains(dataset, left_key, right_key) == ret);
 
             if (!ret) {
                 negative_workload.push_back(workload[i]);

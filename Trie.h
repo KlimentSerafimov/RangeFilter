@@ -10,6 +10,7 @@
 #include <vector>
 #include <cstring>
 #include <iostream>
+#include "assert.h"
 
 using namespace std;
 
@@ -21,9 +22,13 @@ class Trie {
     Trie* parent = nullptr;
     Trie *character[CHAR_SIZE]{};
 
-    char last_char = 0;
-    char init_char = 0;
-    int max_length = 0;
+    char _last_char;
+    char _init_char;
+    int _max_length;
+
+    char* last_char;
+    char* init_char;
+    int* max_length;
 
     int count_ret_false = 0;
 
@@ -51,9 +56,9 @@ public:
         isleaf = false;
         parent = nullptr;
 
-        last_char = 0;
-        init_char = 0;
-        max_length = 0;
+        *last_char = 0;
+        *init_char = 0;
+        *max_length = 0;
 
         count_ret_false = 0;
         delete this;
@@ -73,7 +78,11 @@ public:
     }
 
     // constructor
-    Trie(){
+    Trie(): _last_char((char)0),
+            _init_char((char)127),
+            _max_length(0), last_char(&_last_char),
+            init_char(&_init_char), max_length(&_max_length){
+
         this->isleaf = false;
         for (int i = 0; i <CHAR_SIZE; i ++){
             this->character[i] = nullptr;
@@ -87,6 +96,8 @@ public:
         {
             last_char = parent->last_char;
             init_char = parent->init_char;
+            max_length = parent->max_length;
+
         }
     }
 
@@ -102,26 +113,26 @@ public:
     explicit Trie(const vector<string>& dataset): Trie()
     {
 
-        last_char = (char)0;
-        init_char = (char)127;
-        max_length = 0;
-
-        long long total_num_chars = 0;
-
-        int char_count[127];
-        memset(char_count, 0, sizeof(char_count));
-
-        for(int i = 0;i< (int)dataset.size();i++)
-        {
-            max_length = max(max_length, (int)dataset[i].size());
-            total_num_chars+=(int)dataset[i].size();
-            for(int j = 0;j<(int)dataset[i].size();j++)
-            {
-                last_char = (char)max((int)last_char, (int)dataset[i][j]);
-                init_char = (char)min((int)init_char, (int)dataset[i][j]);
-                char_count[(int)dataset[i][j]] += 1;
-            }
-        }
+//        last_char = (char)0;
+//        init_char = (char)127;
+//        max_length = 0;
+//
+//        long long total_num_chars = 0;
+//
+////        int char_count[127];
+////        memset(char_count, 0, sizeof(char_count));
+//
+//        for(int i = 0;i< (int)dataset.size();i++)
+//        {
+//            max_length = max(max_length, (int)dataset[i].size());
+//            total_num_chars+=(int)dataset[i].size();
+//            for(int j = 0;j<(int)dataset[i].size();j++)
+//            {
+//                last_char = (char)max((int)last_char, (int)dataset[i][j]);
+//                init_char = (char)min((int)init_char, (int)dataset[i][j]);
+////                char_count[(int)dataset[i][j]] += 1;
+//            }
+//        }
 
 
         for(int i = 0;i<(int)dataset.size();i++)

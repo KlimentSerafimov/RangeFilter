@@ -10,18 +10,22 @@
 
 // insert function for putting key in Trie
 void Trie::insert(string key){
-    Trie *curr = this;
 
-    for (int i = 0; i < (int)key.length(); i++){
-        // if path doesn't exist, create a new node
-        if (curr->character[(int)key[i]] == nullptr){
-            curr->character[(int)key[i]] = new Trie(this);
-        }
-        // go to next node
-        curr = curr->character[(int)key[i]];
+    if(key.empty())
+    {
+        isleaf = true;
+        return;
     }
-    // mark the last iterated node as a leaf
-    curr->isleaf = true;
+
+    *last_char = max(*last_char, key[0]);
+    *init_char = min(*init_char, key[0]);
+    *max_length = max(*max_length, (int)key.size());
+
+    if (character[(int)key[0]] == nullptr){
+        character[(int)key[0]] = new Trie(this);
+    }
+    character[(int)key[0]]->insert(key.substr(1, key.length()-1));
+
 }
 
 
@@ -47,6 +51,18 @@ void breakpoint(bool ret)
 }
 
 bool Trie::query(string left, string right) {
+
+    if(parent == nullptr) {
+        for (auto c: left) {
+            *init_char = min(*init_char, c);
+            *last_char = max(*last_char, c);
+        }
+        for (auto c: right) {
+            *init_char = min(*init_char, c);
+            *last_char = max(*last_char, c);
+        }
+    }
+
     assert(left <= right);
     assert(!left.empty() && !right.empty());
 
@@ -210,7 +226,9 @@ bool Trie::deletion(Trie *&curr, string key){
 }
 
 string Trie::get_init_char() {
-    return ""+init_char;
+    string ret = "_";
+    ret[0] = *init_char;
+    return ret;
 }
 
 unsigned long long Trie::get_memory() {
