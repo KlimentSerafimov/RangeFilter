@@ -16,8 +16,11 @@
 #include "Frontier.h"
 #include <map>
 #include <fstream>
+#include <algorithm>
 
 using namespace std;
+
+class DatasetAndWorkload;
 
 class GroundTruthPointQuery: public PointQuery
 {
@@ -30,16 +33,16 @@ public:
         return trie->contains(s);
     }
 
-    virtual void insert(string s)
+    void insert(string s) override
     {
         trie->insert(s);
     }
 
-    virtual unsigned long long get_memory() {
+    unsigned long long get_memory() override {
         return trie->get_memory();
     }
 
-    virtual void clear()
+    void clear() override
     {
         trie->clear();
     }
@@ -49,86 +52,29 @@ public:
 class RangeFilterTemplate
 {
     PointQuery* pq;
-    char last_char{};
-    char init_char{};
+    char max_char{};
+    char min_char{};
     char is_leaf_char{};
-    int max_length{};
-    long long total_num_chars{};
+    size_t max_length{};
 
-    int negative_point_queries = 0;
+    int num_negative_point_queries = 0;
 
-    void calc_metadata(const vector<string>& dataset, const vector<pair<string, string> >& workload, bool do_print)
-    {
-        last_char = (char)0;
-        init_char = (char)127;
-        max_length = 0;
-
-        total_num_chars = 0;
-
-        int char_count[127];
-        memset(char_count, 0, sizeof(char_count));
-
-        for(size_t i = 0;i<dataset.size();i++)
-        {
-            max_length = max(max_length, (int)dataset[i].size());
-            total_num_chars+=(int)dataset[i].size();
-            string prefix = "";
-            for(size_t j = 0;j<dataset[i].size();j++)
-            {
-                prefix+=dataset[i][j];
-                last_char = (char)max((int)last_char, (int)dataset[i][j]);
-                init_char = (char)min((int)init_char, (int)dataset[i][j]);
-                char_count[(int)dataset[i][j]] += 1;
-            }
-        }
-
-        for(size_t i = 0;i<workload.size();i++)
-        {
-            for(size_t j = 0;j<workload[i].first.size();j++)
-            {
-                last_char = (char)max((int)last_char, (int)workload[i].first[j]);
-                init_char = (char)min((int)init_char, (int)workload[i].first[j]);
-            }
-            for(size_t j = 0;j<workload[i].second.size();j++)
-            {
-                last_char = (char)max((int)last_char, (int)workload[i].second[j]);
-                init_char = (char)min((int)init_char, (int)workload[i].second[j]);
-            }
-        }
-
-        assert(init_char <= last_char);
-
-        int num_unique_chars = 0;
-        for(int i = 0;i<127;i++)
-        {
-            if(char_count[i] != 0)
-            {
-                num_unique_chars+=1;
-            }
-        }
-
-        is_leaf_char = (char)((int)init_char-1);
-
-        if(do_print) {
-            cout << "RANGE FILTER STATS" << endl;
-            cout << "num_strings " << (int) dataset.size() << endl;
-            cout << "num_chars " << total_num_chars << endl;
-            cout << "max_length " << max_length << endl;
-            cout << "init_char " << init_char << endl;
-            cout << "last_char " << last_char << endl;
-            cout << "last_char-init_char+1 " << last_char - init_char + 1 << endl;
-            cout << "|unique_chars| " << num_unique_chars << endl;
-            cout << "is_leaf_char " << is_leaf_char << endl;
-        }
-    }
+    void calc_metadata(const DatasetAndWorkload& dataset_and_workload, bool do_print);
 
 public:
     ~RangeFilterTemplate(){
         pq->clear();
     }
-    bool track_negative_point_queries = false;
 private:
+    bool track_negative_point_queries = false;
     map<string, int> prefix_to_negative_point_queries;
+
+    void reset()
+    {
+        track_negative_point_queries = false;
+        prefix_to_negative_point_queries.clear();
+        num_negative_point_queries = 0;
+    }
 
     bool contains(const string& s)
     {
@@ -142,13 +88,13 @@ private:
                 string sub_s = s.substr(0, s.size() - 1);
                 assert(contains(sub_s));
 
-                string record_s = s;
+                const string& record_s = s;
 
                 if (prefix_to_negative_point_queries.find(record_s) == prefix_to_negative_point_queries.end()) {
                     prefix_to_negative_point_queries[record_s] = 0;
                 }
                 prefix_to_negative_point_queries[record_s] += 1;
-                negative_point_queries += 1;
+                num_negative_point_queries += 1;
             }
         }
         return ret;
@@ -158,8 +104,8 @@ private:
         bool ret = true;
         for(int i = 0;i<(int)q.size();i++)
         {
-            ret &= (init_char <= q[i]);
-            ret &= (q[i] <= last_char);
+            ret &= (min_char <= q[i]);
+            ret &= (q[i] <= max_char);
             if(!ret)
             {
                 break;
@@ -168,9 +114,9 @@ private:
         return ret;
     }
 
-    string pad(string s, int num, char c) const
+    static string pad(string s, size_t num, char c)
     {
-        while((int) s.size() < num)
+        while(s.size() < num)
         {
             s+=c;
         }
@@ -185,56 +131,37 @@ private:
 public:
 
     void insert_prefixes(const vector<string>& dataset){
-        long long num_inserted = 0;
         for (size_t i = 0; i < dataset.size(); ++i) {
             string prefix;
             for(size_t j = 0;j<dataset[i].size();j++) {
                 prefix+=dataset[i][j];
                 pq->insert(prefix);
-
-                num_inserted += 1;
-                if ((num_inserted) % 1000000 == 0) {
-                    cout << "inserted(chars) " << num_inserted << "/" << total_num_chars << endl;
-                }
             }
             prefix+=is_leaf_char;
             pq->insert(prefix);
-
-            num_inserted += 1;
-            if ((num_inserted) % 1000000 == 0) {
-                cout << "inserted(chars) " << num_inserted << "/" << total_num_chars << endl;
-            }
-            if ((i+1) % 100000 == 0) {
-                cout << "inserted(strings) " << i+1 << "/" << dataset.size() << endl;
-            }
         }
     }
 
-    RangeFilterTemplate(const vector<string>& dataset, const vector<pair<string, string> >& workload, PointQuery* _pq, bool do_print = false):
-    pq(_pq)
-    {
-        calc_metadata(dataset, workload, do_print);
-        insert_prefixes(dataset);
-    }
+    RangeFilterTemplate(const DatasetAndWorkload& dataset_and_workload, PointQuery* _pq, bool do_print = false);
 
     bool query(string left, string right)
     {
         assert(str_invariant(left));
         assert(str_invariant(right));
 
-        int max_n = max(max_length, (int)max(left.size(), right.size()));
+        size_t max_n = max(max_length, max(left.size(), right.size()));
 
-        if((int)left.size()<max_n)
+        if(left.size()<max_n)
             left[left.size()-1]-=1;
-        left = pad(left, max_n, last_char);
-        right = pad(right, max_n, init_char);
+        left = pad(left, max_n, max_char);
+        right = pad(right, max_n, min_char);
 
         assert(left.size() == right.size());
-        assert((int)left.size() == max_n);
+        assert(left.size() == max_n);
 
         assert(left <= right);
-        int n = left.size();
-        int id = 0;
+        size_t n = left.size();
+        size_t id = 0;
         string prefix;
 
         //check common substring
@@ -285,7 +212,7 @@ public:
                 while (left_id < (int)left.size()) {
                     //check non-boundary characters
                     //aaabc .. aaabz
-                    for (char c = (char) ((int) left[left_id] + 1); c <= (char) ((int) last_char); c++) {
+                    for (char c = (char) ((int) left[left_id] + 1); c <= (char) ((int) max_char); c++) {
                         string local_prefix = left_prefix + c;
                         if (contains(local_prefix)) {
                             breakpoint(true);
@@ -341,7 +268,7 @@ public:
                 while (right_id < (int)right.size()) {
                     //check non-boundary characters
                     //aaaqa .. aaaqp
-                    for (char c = (char) ((int) init_char); c <= (char) ((int) right[right_id] - 1); c++) {
+                    for (char c = (char) ((int) min_char); c <= (char) ((int) right[right_id] - 1); c++) {
                         string local_prefix = right_prefix + c;
                         if (contains(local_prefix)) {
                             breakpoint(true);
@@ -394,24 +321,8 @@ public:
     }
 
     int get_negative_point_queries() {
-        return negative_point_queries;
+        return num_negative_point_queries;
     }
-
-    static bool static_contains(const vector<string>& dataset, const string& left, const string& right)
-    {
-        auto at = lower_bound(dataset.begin(), dataset.end(), left);
-        if(at == dataset.end())
-        {
-            return false;
-        }
-        if(*at > right)
-        {
-            return false;
-        }
-
-        return true;
-    }
-
 
     pair<double, string>* analyze_negative_point_query_density_heatmap(const vector<string>& dataset, const vector<pair<string, string> >& negative_workload) {
         assert(!track_negative_point_queries);
@@ -445,8 +356,7 @@ public:
         }
         sort(arr.begin(), arr.end());
         int prefix_sum = 0;
-        int at_init = 0;
-        int at_end = 0;
+        size_t at_init = 0;
         vector<pair<float, float> > densities;
 
         ofstream out("densities.out");
@@ -455,12 +365,12 @@ public:
 
 //        for(size_t at_arr = 0; at_arr < arr.size(); at_arr++)
 
-        int at_arr = 0;
+        size_t at_arr = 0;
 
         Frontier<string> split_size_vs_density_ratio_frontier(2);
 
         size_t init_row_id = 0;
-        int end_row_id = dataset.size()-1;
+        size_t end_row_id = dataset.size()-1;
 
         assert(!inits.empty());
 
@@ -548,10 +458,13 @@ public:
             vector<double> multi_d_score;
             multi_d_score.push_back(-score);
 
-            int dataset_size = end_row_id-init_row_id+1;
-            int offset_row_id = row_id-init_row_id;
+//            if(false) {
+//                //size_ratio based on dataset.
+//                int dataset_size = end_row_id-init_row_id+1;
+//                int offset_row_id = row_id-init_row_id;
+//                double size_ratio = max((float)offset_row_id/dataset_size, (float)(dataset_size-offset_row_id)/dataset_size);
+//            }
 
-//            double size_ratio = max((float)offset_row_id/dataset_size, (float)(dataset_size-offset_row_id)/dataset_size);
             double size_ratio = max((float)at_init/inits.size(), (float)(inits.size()-at_init)/inits.size());
 //            cout << size_ratio << endl;
             multi_d_score.push_back(size_ratio);
@@ -568,12 +481,10 @@ public:
 
         pair<double, string>* ret = nullptr;
 
-        while(ret == nullptr && constraint_relaxation_id < 4) {
+        while(ret == nullptr && constraint_relaxation_id <= 1) {
             vector<double> constraint;
-            constraint.push_back(-1.5);
+            constraint.push_back(-2);
             constraint.push_back(1.0 - 0.1/constraint_relaxation_id);
-
-            int opt_dim = 0;
 
             auto optimization_function = [](vector<double> in) {
                     return - in[0] * in[0] * (1 - in[1]);
@@ -597,6 +508,8 @@ public:
 
             constraint_relaxation_id ++;
         }
+
+        reset();
 
         return ret;
     }

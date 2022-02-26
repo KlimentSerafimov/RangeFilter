@@ -275,11 +275,8 @@ class RichMultiBloom: public MultiBloom {
     char prev_is_leaf_char{};
 
 public:
-    RichMultiBloom(const vector<string> &_dataset, const vector<pair<string, string> > &workload, double _seed_fpr,
-                   int _cutoff = -1, bool do_print = false) :
-            MultiBloom(_dataset, _seed_fpr, _cutoff, do_print), dataset(_dataset) {
-
-    };
+    RichMultiBloom(const DatasetAndWorkload& dataset_and_workload, double _seed_fpr,
+                   int _cutoff = -1, bool do_print = false);
 
     void reinitialize(const RichMultiBloomParams& new_params)
     {

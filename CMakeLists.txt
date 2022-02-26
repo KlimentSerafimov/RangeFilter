@@ -8,6 +8,6 @@ include_directories(bloom surf)
 add_executable(RangeFilter main.cpp
         bloom/bloom_filter.hpp
         Trie.cpp Trie.h
-        surf/surf_implementation.cpp surf/surf_implementation.h RangeFilterMultiBloom.cpp RangeFilterMultiBloom.h RangeFilterTemplate.h PointQuery.h bloom/bloom_filter.cpp Frontier.cpp Frontier.h HybridPointQuery.cpp HybridPointQuery.h)
+        surf/surf_implementation.cpp surf/surf_implementation.h RangeFilterMultiBloom.cpp RangeFilterMultiBloom.h RangeFilterTemplate.h PointQuery.h bloom/bloom_filter.cpp Frontier.cpp Frontier.h HybridPointQuery.cpp HybridPointQuery.h DatasetAndWorkload.cpp DatasetAndWorkload.h RangeFilterTemplate.cpp)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/surf/CMakeLists.txt)

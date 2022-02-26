@@ -237,8 +237,8 @@ unsigned long long Trie::get_memory() {
 //    Trie* parent = nullptr; //opt away
 //    Trie *character[CHAR_SIZE]{};
 //
-//    char last_char;  //opt away
-//    char init_char;  //opt away
+//    char max_char;  //opt away
+//    char min_char;  //opt away
 //    int max_length;  //opt away
 
     unsigned long long ret = 0;

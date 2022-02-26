@@ -326,10 +326,10 @@ public:
 
         pair<double, pair<vector<double>, ParamsType> >* ret = nullptr;
 
-        for(int i = 0;i<frontier.size();i++)
+        for(size_t i = 0;i<frontier.size();i++)
         {
             bool passes = true;
-            for(int j = 0;j<constraint.size();j++)
+            for(size_t j = 0;j<constraint.size();j++)
             {
                 if(constraint[j] < frontier[i][j])
                 {

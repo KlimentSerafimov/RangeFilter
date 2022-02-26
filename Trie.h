@@ -10,7 +10,7 @@
 #include <vector>
 #include <cstring>
 #include <iostream>
-#include "assert.h"
+#include <cassert>
 
 using namespace std;
 
@@ -113,8 +113,8 @@ public:
     explicit Trie(const vector<string>& dataset): Trie()
     {
 
-//        last_char = (char)0;
-//        init_char = (char)127;
+//        max_char = (char)0;
+//        min_char = (char)127;
 //        max_length = 0;
 //
 //        long long total_num_chars = 0;
@@ -128,8 +128,8 @@ public:
 //            total_num_chars+=(int)dataset[i].size();
 //            for(int j = 0;j<(int)dataset[i].size();j++)
 //            {
-//                last_char = (char)max((int)last_char, (int)dataset[i][j]);
-//                init_char = (char)min((int)init_char, (int)dataset[i][j]);
+//                max_char = (char)max((int)max_char, (int)dataset[i][j]);
+//                min_char = (char)min((int)min_char, (int)dataset[i][j]);
 ////                char_count[(int)dataset[i][j]] += 1;
 //            }
 //        }
