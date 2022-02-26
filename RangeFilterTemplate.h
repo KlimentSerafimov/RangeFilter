@@ -141,10 +141,13 @@ private:
             if (!ret) {
                 string sub_s = s.substr(0, s.size() - 1);
                 assert(contains(sub_s));
-                if (prefix_to_negative_point_queries.find(sub_s) == prefix_to_negative_point_queries.end()) {
-                    prefix_to_negative_point_queries[sub_s] = 0;
+
+                string record_s = s;
+
+                if (prefix_to_negative_point_queries.find(record_s) == prefix_to_negative_point_queries.end()) {
+                    prefix_to_negative_point_queries[record_s] = 0;
                 }
-                prefix_to_negative_point_queries[sub_s] += 1;
+                prefix_to_negative_point_queries[record_s] += 1;
                 negative_point_queries += 1;
             }
         }
@@ -416,7 +419,7 @@ public:
 
 
     vector<pair<string, string> > negative_workload;
-    string analyze_negative_point_query_density_heatmap(const vector<string>& dataset, const vector<pair<string, string> >& workload) {
+    pair<float, string> analyze_negative_point_query_density_heatmap(const vector<string>& dataset, const vector<pair<string, string> >& workload) {
         assert(!track_negative_point_queries);
 
         for(size_t i = 0;i<workload.size();i++) {
@@ -448,19 +451,19 @@ public:
         {
             assert(negative_workload[i].first <= negative_workload[i].second);
             inits.push_back(negative_workload[i]);
-            ends.emplace_back(negative_workload[i].second, negative_workload[i].first);
         }
 
         sort(inits.begin(), inits.end());
-        sort(ends.begin(), ends.end());
 
-        vector<pair<string, int> > array;
+        vector<string> arr;
+        vector<int> negative_count;
         int sum = 0;
         for(const auto& it: prefix_to_negative_point_queries) {
-            array.emplace_back(it.first, it.second);
+            arr.emplace_back(it.first);
+            negative_count.push_back(it.second);
             sum+=it.second;
         }
-        sort(array.begin(), array.end());
+        sort(arr.begin(), arr.end());
         int prefix_sum = 0;
         int at_init = 0;
         int at_end = 0;
@@ -470,62 +473,76 @@ public:
 
         pair<float, string> best_split = make_pair(-1, "");
 
-        for(size_t i = 0;i<array.size();i++)
+//        for(size_t at_arr = 0; at_arr < arr.size(); at_arr++)
+
+        int at_arr = 0;
+
+
+        for(size_t row_id = 0; row_id < dataset.size();row_id++)
         {
-            prefix_sum+=array[i].second;
-            while(at_init < inits.size() && inits[at_init].first < array[i].first)
+
+            if(at_init >= 1)
             {
-                assert(inits[at_init].first != array[i].first);
-                if(inits[at_init].second > array[i].first) {
-                    assert(inits[at_init].second.size() > array[i].first.size());
-                    assert(inits[at_init].second.substr(0, array[i].first.size()) == array[i].first);
-                }
-                at_init+=1;
-            }
-            while(at_end < ends.size() && ((ends[at_end].first < array[i].first) ||
-                    (ends[at_end].first > array[i].first && (
-                       ends[at_end].first.size() > array[i].first.size() &&
-                       ends[at_end].first.substr(0, array[i].first.size()) == array[i].first))))
-            {
-                at_end+=1;
-            }
-            if(at_end < ends.size()) {
-                assert(inits[at_end].first != array[i].first);
-                assert(ends[at_end].second > array[i].first);
+                assert(inits[at_init-1].first < dataset[row_id]);
             }
 
-            if((inits.size()-at_init-1) == 0)
+            while(at_init < inits.size() && inits[at_init].first < dataset[row_id]) {
+                assert(inits[at_init].second < dataset[row_id]);
+                at_init++;
+            }
+            if(at_init < inits.size())
+                assert(inits[at_init].first > dataset[row_id]);
+
+            while(at_arr < arr.size() && arr[at_arr] < dataset[row_id]) {
+                prefix_sum += negative_count[at_arr];
+                at_arr++;
+            }
+            if(at_arr < arr.size())
+                assert(arr[at_arr] > dataset[row_id]);
+            else
+                assert(prefix_sum == sum);
+
+            if(at_init == 0 || inits.size() == at_init)
             {
+                //no split
                 continue;
             }
 
-            float left_density = (float)prefix_sum/(at_init+1);
-            float right_density = (float)(sum-prefix_sum)/(inits.size()-at_init-1);
+            if(prefix_sum == 0 || prefix_sum == sum)
+            {
+                if(prefix_sum == sum)
+                {
+                    assert(at_arr == arr.size());
+                }
+                assert(false);
+                continue;
+            }
 
+            if(at_arr >= arr.size())
+            {
+                assert(false);
+            }
+
+            assert(inits[at_init-1].second < dataset[row_id]);
+            assert(inits[at_init].first > dataset[row_id]);
+
+            float left_density = (float)prefix_sum/(at_init);
+            float right_density = (float)(sum-prefix_sum)/(inits.size()-at_init);
 
             densities.emplace_back(left_density,right_density);
 //            cout <<at_init <<" "<< left_density <<" "<< right_density << endl;
 
 
-            if(right_density == 0 || left_density == 0)
-            {
-                continue;
-            }
-
             float score = max(right_density/left_density, left_density/right_density);
-            out << at_init << " "<< score << endl;
+            out << row_id << " "<< score <<  " left_density = "  << prefix_sum <<" / "<< at_init << " = " << left_density << " | right_density = " << (sum-prefix_sum) << "/" <<(inits.size() - at_init) << " = " << right_density <<" | ratios: " << left_density/right_density <<" "<< right_density/left_density << endl;
 
-            if(at_init < inits.size())
-            best_split = max(best_split, make_pair(score, inits[at_init].second));
-
-
-
+            best_split = max(best_split, make_pair(score, dataset[row_id]));
         }
         out.close();
 
         cout << best_split.first <<" "<< best_split.second << endl;
 
-        return best_split.second;
+        return best_split;
     }
 };
 

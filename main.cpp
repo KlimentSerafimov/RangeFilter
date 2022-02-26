@@ -78,7 +78,7 @@ void eval_trie_vs_rf()
     PointQuery *ground_truth_point_query = new GroundTruthPointQuery();
     RangeFilterTemplate* rf = new RangeFilterTemplate(dataset, workload, ground_truth_point_query, false);
 
-    string best_split = rf->analyze_negative_point_query_density_heatmap(dataset, workload);
+    string best_split = rf->analyze_negative_point_query_density_heatmap(dataset, workload).second;
 
 
     cout << "start eval" << endl;
@@ -638,7 +638,7 @@ void eval_rf_heatmap()
 {
     priority_queue<pair<int, vector<pair<string, string> > > > workloads;
 
-    workloads.push(make_pair(workloads.size(), workload));
+    workloads.push(make_pair(workload.size(), workload));
 
     while(!workloads.empty()) {
 
@@ -650,8 +650,18 @@ void eval_rf_heatmap()
         PointQuery *ground_truth_point_query = new GroundTruthPointQuery();
         RangeFilterTemplate ground_truth = RangeFilterTemplate(dataset, local_workload, ground_truth_point_query, false);
 
-        string best_split = ground_truth.analyze_negative_point_query_density_heatmap(dataset, local_workload);
+        pair<float, string> ratio_and_best_split = ground_truth.analyze_negative_point_query_density_heatmap(dataset, local_workload);
+
+        float ratio = ratio_and_best_split.first;
+        string best_split = ratio_and_best_split.second;
+
         cout << endl;
+
+        if(ratio == 1)
+        {
+            cout << "UNIFORM size = " << ground_truth.negative_workload.size() << endl;
+            continue;
+        }
 
 //        return;
 
@@ -664,10 +674,10 @@ void eval_rf_heatmap()
         vector<pair<string, string> > right_workload;
 
         for (int i = 0; i < ground_truth.negative_workload.size(); i++) {
-            if (local_workload[i].second <= best_split) {
-                left_workload.push_back(local_workload[i]);
+            if (ground_truth.negative_workload[i].second <= best_split) {
+                left_workload.push_back(ground_truth.negative_workload[i]);
             } else {
-                right_workload.push_back(local_workload[i]);
+                right_workload.push_back(ground_truth.negative_workload[i]);
             }
         }
 
