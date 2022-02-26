@@ -29,6 +29,7 @@ void eval_trie_vs_rf()
     Trie trie(dataset);
 
     vector<pair<int, double> > vec;
+    vec.reserve(8);
     for(int i = 0; i<8; i++)
     {
         vec.emplace_back(20, 0.0001);
@@ -78,7 +79,24 @@ void eval_trie_vs_rf()
     PointQuery *ground_truth_point_query = new GroundTruthPointQuery();
     RangeFilterTemplate* rf = new RangeFilterTemplate(dataset, workload, ground_truth_point_query, false);
 
-    string best_split = rf->analyze_negative_point_query_density_heatmap(dataset, workload).second;
+    vector<pair<string, string> > negative_workload;
+
+    for(size_t i = 0;i<workload.size();i++) {
+        string left_key = workload[i].first;
+        string right_key = workload[i].second;
+
+        bool ret = rf->query(left_key, right_key);
+        assert(rf->static_contains(dataset, left_key, right_key) == ret);
+
+        if (!ret) {
+            negative_workload.push_back(workload[i]);
+        }
+    }
+
+    cout << "|negative_workload| = " << negative_workload.size() << endl;
+
+
+    string best_split = rf->analyze_negative_point_query_density_heatmap(dataset, negative_workload)->second;
 
 
     cout << "start eval" << endl;
@@ -363,9 +381,7 @@ int test_bloom_filter()
 
 }
 
-vector<pair<string, string> > workload;
-
-int prep_dataset_and_workload(const string& file_path, string workload_difficulty, int impossible_depth = -1)
+int prep_dataset_and_workload(vector<pair<string, string> >& workload, const string& file_path, const string& workload_difficulty, int impossible_depth = -1)
 {
 
     workload_seed_and_dataset = read_dataset(file_path);
@@ -527,7 +543,7 @@ int prep_dataset_and_workload(const string& file_path, string workload_difficult
     return num_bf_inserts;
 }
 
-int main_test_surf()
+int main_test_surf(const vector<pair<string, string> >& workload)
 {
     for(int trie_size = 1; trie_size <= 120; trie_size+=1) {
         SurfStats surf_ret = test_surf(dataset, workload, trie_size);
@@ -536,10 +552,10 @@ int main_test_surf()
     }
     return 0;
 }
-void grid_search(const string& range_filter_type, ofstream& output_file);
-void simulated_annealing(ofstream& output_file);
+void grid_search(const vector<pair<string, string> >& workload, const string& range_filter_type, ofstream& output_file);
+void simulated_annealing(const vector<pair<string, string> >& workload, ofstream& output_file);
 
-void eval_trie_heatmap()
+void eval_trie_heatmap(const vector<pair<string, string> >& workload)
 {
     Trie trie = Trie(dataset);
 
@@ -623,69 +639,76 @@ void eval_trie_heatmap()
 //    num ret_false 461930 num_negatives 24999
 //    num negative_point_queries/num_negatives 18.4779
 
-
-
-
-
 }
-
-vector<pair<string, string> > negative_workload;
-
 
 #include <queue>
 
-void eval_rf_heatmap()
+void eval_rf_heatmap(const vector<pair<string, string> >& workload)
 {
     priority_queue<pair<int, vector<pair<string, string> > > > workloads;
 
-    workloads.push(make_pair(workload.size(), workload));
+    vector<pair<string, string> > negative_workload;
+
+    for(size_t i = 0;i<workload.size();i++) {
+        string left_key = workload[i].first;
+        string right_key = workload[i].second;
+
+        bool ret = contains(dataset, left_key, right_key);
+
+        if (!ret) {
+            negative_workload.push_back(workload[i]);
+        }
+    }
+
+    workloads.push(make_pair(negative_workload.size(), negative_workload));
 
     while(!workloads.empty()) {
-
         int sz = workloads.top().first;
+        assert(sz >= 2);
         cout << "SZ: " << sz << endl;
         vector<pair<string, string> > local_workload = workloads.top().second;
+        assert(local_workload.size() == sz);
         workloads.pop();
 
         PointQuery *ground_truth_point_query = new GroundTruthPointQuery();
         RangeFilterTemplate ground_truth = RangeFilterTemplate(dataset, local_workload, ground_truth_point_query, false);
 
-        pair<float, string> ratio_and_best_split = ground_truth.analyze_negative_point_query_density_heatmap(dataset, local_workload);
+        pair<double, string>* _ratio_and_best_split = ground_truth.analyze_negative_point_query_density_heatmap(dataset, local_workload);
+        if(_ratio_and_best_split == nullptr)
+        {
+            cout << "UNIFORM size = " << local_workload.size() << endl;
+            continue;
+        }
+
+        pair<double, string> ratio_and_best_split = *_ratio_and_best_split;
 
         float ratio = ratio_and_best_split.first;
         string best_split = ratio_and_best_split.second;
 
         cout << endl;
 
-        if(ratio == 1)
-        {
-            cout << "UNIFORM size = " << ground_truth.negative_workload.size() << endl;
-            continue;
-        }
-
-//        return;
-
-        if(ground_truth.negative_workload.size() <= 1)
-        {
-            continue;
-        }
+        assert(local_workload.size() > 1);
 
         vector<pair<string, string> > left_workload;
         vector<pair<string, string> > right_workload;
 
-        for (int i = 0; i < ground_truth.negative_workload.size(); i++) {
-            if (ground_truth.negative_workload[i].second <= best_split) {
-                left_workload.push_back(ground_truth.negative_workload[i]);
+        for (int i = 0; i < local_workload.size(); i++) {
+            if (local_workload[i].second <= best_split) {
+                left_workload.push_back(local_workload[i]);
             } else {
-                right_workload.push_back(ground_truth.negative_workload[i]);
+                right_workload.push_back(local_workload[i]);
             }
         }
 
         cout << left_workload.size() << endl;
         cout << right_workload.size() << endl;
 
-        workloads.push(make_pair(left_workload.size(), left_workload));
-        workloads.push(make_pair(right_workload.size(), right_workload));
+        if(left_workload.size() >= 2) {
+            workloads.push(make_pair(left_workload.size(), left_workload));
+        }
+        if(right_workload.size() >= 2) {
+            workloads.push(make_pair(right_workload.size(), right_workload));
+        }
 
     }
 //
@@ -838,25 +861,27 @@ int main() {
         return 0;
     }
 
-    prep_dataset_and_workload(file_path, workload_difficulty);
+    vector<pair<string, string> > workload;
+
+    prep_dataset_and_workload(workload, file_path, workload_difficulty);
 
     if (range_filter_type == "surf") {
         assert(parameter_search_style == "grid_search");
-        main_test_surf();
+        main_test_surf(workload);
         return 0;
     }
 
     if(range_filter_type == "heatmap")
     {
         assert(parameter_search_style == "no_search");
-        eval_rf_heatmap();
+        eval_rf_heatmap(workload);
         return 0;
     }
 
     if(range_filter_type == "trie")
     {
         assert(parameter_search_style == "no_search");
-        eval_trie_heatmap();
+        eval_trie_heatmap(workload);
         return 0;
     }
 
@@ -866,20 +891,15 @@ int main() {
 //    string file_folder = "/home/kliment/Downloads/";
 //    string file_name = "emails-validated-random-only-30-characters.txt.sorted";
 
-
-
-    prep_dataset_and_workload(file_path, workload_difficulty);
-
-
     if(parameter_search_style == "grid_search") {
         ofstream output_file = ofstream ("results__grid_search.out");
-        grid_search(range_filter_type, output_file);
+        grid_search(workload, range_filter_type, output_file);
         output_file.close();
     }
     else {
         ofstream output_file = ofstream ("results__simulated_annealing.out");
         assert(range_filter_type == "multi_bloom");
-        simulated_annealing(output_file);
+        simulated_annealing(workload, output_file);
         output_file.close();
     }
 
@@ -889,7 +909,7 @@ int main() {
 
 #include "Frontier.h"
 
-void simulated_annealing(ofstream& output_file)
+void simulated_annealing(const vector<pair<string, string> >& workload, ofstream& output_file)
 {
     double seed_fpr = 0.1;
 
@@ -1107,7 +1127,7 @@ void simulated_annealing(ofstream& output_file)
     output_file << "DONE" << endl;
 }
 
-void grid_search(const string& _range_filter_type, ofstream& output_file){
+void grid_search(const vector<pair<string, string> >& workload, const string& _range_filter_type, ofstream& output_file){
 
     string range_filter_type = _range_filter_type;
 
@@ -1216,7 +1236,8 @@ void grid_search(const string& _range_filter_type, ofstream& output_file){
                     MultiBloomParams *params = (MultiBloomParams *)ret.get_params();
                     frontier.insert(*(params->clone()), ret.to_vector());
                 }
-                rf->clear();
+                delete rf;
+                pq->clear();
                 output_file << ret.to_string() << endl;
                 cout << ret.to_string() << endl;
                 if (ret.false_positive_rate() > 0.5) {

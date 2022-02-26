@@ -13,6 +13,7 @@
 #include <cassert>
 #include "PointQuery.h"
 #include "Trie.h"
+#include "Frontier.h"
 #include <map>
 #include <fstream>
 
@@ -124,7 +125,6 @@ class RangeFilterTemplate
 public:
     ~RangeFilterTemplate(){
         pq->clear();
-        delete pq;
     }
     bool track_negative_point_queries = false;
 private:
@@ -384,11 +384,6 @@ public:
         return pq->get_memory() + 3*sizeof(char) + sizeof(int) + sizeof(long long);
     }
 
-    void clear()
-    {
-        pq->clear();
-    }
-
     PointQuery* get_point_query()
     {
         return pq;
@@ -418,23 +413,8 @@ public:
     }
 
 
-    vector<pair<string, string> > negative_workload;
-    pair<float, string> analyze_negative_point_query_density_heatmap(const vector<string>& dataset, const vector<pair<string, string> >& workload) {
+    pair<double, string>* analyze_negative_point_query_density_heatmap(const vector<string>& dataset, const vector<pair<string, string> >& negative_workload) {
         assert(!track_negative_point_queries);
-
-        for(size_t i = 0;i<workload.size();i++) {
-            string left_key = workload[i].first;
-            string right_key = workload[i].second;
-
-            bool ret = query(left_key, right_key);
-            assert(static_contains(dataset, left_key, right_key) == ret);
-
-            if (!ret) {
-                negative_workload.push_back(workload[i]);
-            }
-        }
-
-        cout << "|negative_workload| = " << negative_workload.size() << endl;
 
         track_negative_point_queries = true;
 
@@ -477,15 +457,39 @@ public:
 
         int at_arr = 0;
 
+        Frontier<string> split_size_vs_density_ratio_frontier(2);
 
+        size_t init_row_id = 0;
+        int end_row_id = dataset.size()-1;
+
+        assert(!inits.empty());
+
+        bool enter = false;
         for(size_t row_id = 0; row_id < dataset.size();row_id++)
         {
-
-            if(at_init >= 1)
-            {
-                assert(inits[at_init-1].first < dataset[row_id]);
+            if(dataset[row_id] > inits[0].first) {
+                init_row_id = row_id;
+                enter = true;
+                break;
             }
+        }
 
+        assert(enter);
+
+        enter = false;
+
+        for(int row_id = dataset.size()-1; row_id >= 0;row_id--)
+        {
+            if(dataset[row_id] < inits[inits.size()-1].second) {
+                end_row_id = row_id;
+                enter = true;
+                break;
+            }
+        }
+
+        assert(enter);
+
+        for(size_t row_id = init_row_id; row_id <= end_row_id; row_id++) {
             while(at_init < inits.size() && inits[at_init].first < dataset[row_id]) {
                 assert(inits[at_init].second < dataset[row_id]);
                 at_init++;
@@ -499,11 +503,14 @@ public:
             }
             if(at_arr < arr.size())
                 assert(arr[at_arr] > dataset[row_id]);
-            else
+            else{
                 assert(prefix_sum == sum);
+                assert(at_init == inits.size()-1);
+            }
 
             if(at_init == 0 || inits.size() == at_init)
             {
+                assert(false);
                 //no split
                 continue;
             }
@@ -532,17 +539,66 @@ public:
             densities.emplace_back(left_density,right_density);
 //            cout <<at_init <<" "<< left_density <<" "<< right_density << endl;
 
-
             float score = max(right_density/left_density, left_density/right_density);
             out << row_id << " "<< score <<  " left_density = "  << prefix_sum <<" / "<< at_init << " = " << left_density << " | right_density = " << (sum-prefix_sum) << "/" <<(inits.size() - at_init) << " = " << right_density <<" | ratios: " << left_density/right_density <<" "<< right_density/left_density << endl;
 
             best_split = max(best_split, make_pair(score, dataset[row_id]));
+
+
+            vector<double> multi_d_score;
+            multi_d_score.push_back(-score);
+
+            int dataset_size = end_row_id-init_row_id+1;
+            int offset_row_id = row_id-init_row_id;
+
+//            double size_ratio = max((float)offset_row_id/dataset_size, (float)(dataset_size-offset_row_id)/dataset_size);
+            double size_ratio = max((float)at_init/inits.size(), (float)(inits.size()-at_init)/inits.size());
+//            cout << size_ratio << endl;
+            multi_d_score.push_back(size_ratio);
+
+            split_size_vs_density_ratio_frontier.insert(dataset[row_id], multi_d_score);
         }
         out.close();
 
-        cout << best_split.first <<" "<< best_split.second << endl;
+        cout << "best based on density ratio: " << best_split.first <<" "<< best_split.second << endl;
 
-        return best_split;
+        split_size_vs_density_ratio_frontier.print(cout, 10, true);
+
+        int constraint_relaxation_id = 1;
+
+        pair<double, string>* ret = nullptr;
+
+        while(ret == nullptr && constraint_relaxation_id < 4) {
+            vector<double> constraint;
+            constraint.push_back(-1.5);
+            constraint.push_back(1.0 - 0.1/constraint_relaxation_id);
+
+            int opt_dim = 0;
+
+            auto optimization_function = [](vector<double> in) {
+                    return - in[0] * in[0] * (1 - in[1]);
+            };
+
+            pair<vector<double>, string> *almost_ret = split_size_vs_density_ratio_frontier.get_best_better_than(
+                    constraint, optimization_function);
+
+            if (almost_ret != nullptr) {
+                ret = new pair<double, string>(-almost_ret->first[0], almost_ret->second);
+            }
+            cout << "constrain_relaxation_id " << constraint_relaxation_id << endl;
+
+            if(ret != nullptr) {
+                cout << "ret: " << ret->first << " " << ret->second << " size_ratio: " << almost_ret->first[1] << endl;
+            }
+            else
+            {
+                cout << "ret = nullptr" << endl;
+            }
+
+            constraint_relaxation_id ++;
+        }
+
+        return ret;
     }
 };
 

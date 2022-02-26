@@ -11,6 +11,7 @@
 #include <string>
 #include <cassert>
 #include <iostream>
+#include <functional>
 
 using namespace std;
 
@@ -158,13 +159,32 @@ class Frontier
 public:
     explicit Frontier(size_t _num_objectives): num_objectives(_num_objectives){}
 
-    void print(ofstream& out)
+    void print(ostream& out, int print_top = -1, bool decorate = false)
     {
         remove_erased();
-        for(size_t i = 0;i<frontier.size();i++)
+        sort(frontier.begin(), frontier.end());
+        reverse(frontier.begin(), frontier.end());
+        int init_print = 0;
+
+        if(decorate)
+        out << "frontier (";
+
+        if(print_top != -1)
+        {
+            init_print = max(0, (int)frontier.size()-print_top);
+
+        }
+
+        if(decorate)
+        out << "top " << frontier.size() - init_print << "/" << frontier.size() << ")" <<  endl;
+
+        for(size_t i = init_print; i<frontier.size();i++)
         {
             out << frontier[i].to_string() << endl;
         }
+
+        if(decorate)
+        out << "done printing_frontier" << endl;
     }
 
 /**
@@ -296,6 +316,53 @@ public:
         remove_erased();
         sort(frontier.begin(), frontier.end());
         return frontier;
+    }
+
+    pair<vector<double>, ParamsType>* get_best_better_than(vector<double> constraint, std::function<double(vector<double>)> optimization_function) {
+
+        remove_erased();
+
+        assert(constraint.size() == num_objectives);
+
+        pair<double, pair<vector<double>, ParamsType> >* ret = nullptr;
+
+        for(int i = 0;i<frontier.size();i++)
+        {
+            bool passes = true;
+            for(int j = 0;j<constraint.size();j++)
+            {
+                if(constraint[j] < frontier[i][j])
+                {
+                    passes = false;
+                    break;
+                }
+            }
+
+            if(passes)
+            {
+                auto tmp = new pair<double, pair<vector<double>, ParamsType> >(
+                        optimization_function(frontier[i].get_score()),
+                        make_pair(
+                                frontier[i].get_score(),
+                                frontier[i].get_params()
+                        )
+                );
+                if(ret == nullptr)
+                {
+                    ret = tmp;
+                }
+                else
+                {
+                    *ret = min(*ret, *tmp);
+                }
+            }
+        }
+        if(ret != nullptr) {
+            return &ret->second;
+        }
+        else {
+            return nullptr;
+        }
     }
 };
 
