@@ -62,7 +62,7 @@ public:
         return score[dim_id];
     }
 
-    const vector<double>& get_score()
+    const vector<double>& get_score_as_vector()
     {
         assert(!is_erased());
         return score;
@@ -341,9 +341,9 @@ public:
             if(passes)
             {
                 auto tmp = new pair<double, pair<vector<double>, ParamsType> >(
-                        optimization_function(frontier[i].get_score()),
+                        optimization_function(frontier[i].get_score_as_vector()),
                         make_pair(
-                                frontier[i].get_score(),
+                                frontier[i].get_score_as_vector(),
                                 frontier[i].get_params()
                         )
                 );

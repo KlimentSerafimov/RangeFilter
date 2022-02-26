@@ -33,7 +33,7 @@ public:
 
     void process_str(const string& str)
     {
-        max_length = max(max_length, dataset.size());
+        max_length = max(max_length, str.size());
         for(auto c : str) {
             min_char = min(min_char, c);
             max_char = max(max_char, c);
@@ -86,7 +86,9 @@ public:
 
 
 
-    RangeFilterStats test_range_filter(RangeFilterTemplate* rf, bool do_print);
+    RangeFilterStats test_range_filter(RangeFilterTemplate* rf, bool do_print = false);
+
+    RangeFilterStats eval_point_query(PointQuery* pq);
 
     int prep_dataset_and_workload(const string& file_path, const string& workload_difficulty, int impossible_depth = -1);
 

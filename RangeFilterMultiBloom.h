@@ -28,15 +28,15 @@ public:
         return new MultiBloomParams(params);
     }
 
-    explicit MultiBloomParams() {}
+    explicit MultiBloomParams() = default;
 
     explicit MultiBloomParams(vector<pair<int, double> > _fprs) : params(std::move(_fprs)) {}
 
-    const vector<pair<int, double> > &get_params() const {
+    virtual const vector<pair<int, double> > &get_params() const {
         return params;
     };
 
-    virtual string to_string() const override
+    string to_string() const override
     {
         string ret;
         for (size_t i = 0; i < params.size(); i++) {
@@ -47,7 +47,7 @@ public:
     }
 };
 
-class RichMultiBloomParams: public MultiBloomParams
+class RichMultiBloomParams: virtual public MultiBloomParams
 {
 
 private:
@@ -55,6 +55,20 @@ private:
     size_t epoch_id{};
     size_t used_for_reinit_count = 0;
 public:
+
+    RichMultiBloomParams* clone() const override
+    {
+        RichMultiBloomParams* ret = new RichMultiBloomParams(params);
+        ret->iter_id = iter_id;
+        ret->epoch_id = epoch_id;
+        ret->used_for_reinit_count = ret->used_for_reinit_count;
+        return ret;
+    }
+
+    const vector<pair<int, double> >& get_params() const override
+    {
+        return MultiBloomParams::get_params();
+    }
 
     explicit RichMultiBloomParams(vector<pair<int, double> > _fprs): MultiBloomParams(std::move(_fprs)){}
 
@@ -92,7 +106,7 @@ public:
 };
 
 
-class MultiBloom: public PointQuery, public MultiBloomParams
+class MultiBloom: public PointQuery, virtual public MultiBloomParams
 {
 
     int max_length{};
@@ -157,7 +171,7 @@ private:
     }
 
 protected:
-    size_t lvl(string s)
+    static size_t lvl(const string& s)
     {
         return s.size()-1;
     }
@@ -266,7 +280,7 @@ public:
     }
 };
 
-class RichMultiBloom: public MultiBloom {
+class RichMultiBloom: public MultiBloom, public RichMultiBloomParams {
     const vector<string>& dataset;
 
     bool has_prev = false;
@@ -275,12 +289,23 @@ class RichMultiBloom: public MultiBloom {
     char prev_is_leaf_char{};
 
 public:
+
+    RichMultiBloom* clone() const override
+    {
+        assert(false);
+    }
+
+    string to_string() const override
+    {
+        return RichMultiBloomParams::to_string();
+    }
+
     RichMultiBloom(const DatasetAndWorkload& dataset_and_workload, double _seed_fpr,
                    int _cutoff = -1, bool do_print = false);
 
     void reinitialize(const RichMultiBloomParams& new_params)
     {
-        params = new_params.get_params();
+        MultiBloomParams::params = new_params.get_params();
         clear();
         init();
     }

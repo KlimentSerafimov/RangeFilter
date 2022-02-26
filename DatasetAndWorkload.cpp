@@ -259,3 +259,9 @@ int DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, const
 
     return num_bf_inserts;
 }
+
+RangeFilterStats DatasetAndWorkload::eval_point_query(PointQuery *pq) {
+    RangeFilterTemplate* rf = new RangeFilterTemplate(*this, pq);
+    RangeFilterStats rez = test_range_filter(rf);
+    return rez;
+}

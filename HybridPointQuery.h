@@ -113,6 +113,20 @@ public:
         assert(invariant());
     }
 
+    HybridPointQuery(const string& midpoint, PointQuery* left_pq, PointQuery* right_pq, bool do_print = false):
+            HybridPointQueryParams()
+    {
+        n = 2;
+        splits.push_back(midpoint);
+
+        sub_point_query.push_back(left_pq);
+        sub_point_query_params.push_back(*sub_point_query.rbegin());
+        sub_point_query.push_back(right_pq);
+        sub_point_query_params.push_back(*sub_point_query.rbegin());
+
+        assert(invariant());
+    }
+
     HybridPointQueryParams* clone() const override{
         return HybridPointQueryParams::clone();
     }
