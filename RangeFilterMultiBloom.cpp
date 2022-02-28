@@ -8,6 +8,6 @@
 RichMultiBloom::RichMultiBloom(const DatasetAndWorkload &dataset_and_workload, double _seed_fpr, int _cutoff,
                                bool do_print)  :
         MultiBloom(dataset_and_workload.get_dataset(), _seed_fpr, _cutoff, do_print),
-        RichMultiBloomParams(vector<pair<int, double> > (1, make_pair(_seed_fpr, _cutoff))), dataset(dataset_and_workload.get_dataset()) {
+        RichMultiBloomParams(MultiBloom::params), dataset(dataset_and_workload.get_dataset()) {
 
 };

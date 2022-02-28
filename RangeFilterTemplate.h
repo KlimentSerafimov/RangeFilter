@@ -28,12 +28,12 @@ public:
     Trie* trie;
     GroundTruthPointQuery(): trie(new Trie()) {}
 
-    bool contains(string s) override
+    bool contains(const string& s) override
     {
         return trie->contains(s);
     }
 
-    void insert(string s) override
+    void insert(const string& s) override
     {
         trie->insert(s);
     }
@@ -125,10 +125,13 @@ private:
 
     void breakpoint(bool ret)
     {
-//        cout << "ret" << endl;
+        if(do_breakpoint && ret)
+        cout << "ret" << endl;
     }
 
 public:
+
+    bool do_breakpoint = false;
 
     void insert_prefixes(const vector<string>& dataset){
         for (size_t i = 0; i < dataset.size(); ++i) {
@@ -146,13 +149,30 @@ public:
 
     bool query(string left, string right)
     {
+        assert(!left.empty() && !right.empty());
         assert(str_invariant(left));
         assert(str_invariant(right));
 
         size_t max_n = max(max_length, max(left.size(), right.size()));
 
-        if(left.size()<max_n)
-            left[left.size()-1]-=1;
+        if(left.size()<max_n) {
+            assert(left.size() >= 1);
+            size_t at = left.size()-1;
+            if(left[at] == 0) {
+                left.pop_back();
+            }
+            else {
+                left[at] -= 1;
+            }
+//            while(left[at] == 0) {
+//                left[at] = max_char;
+//                assert(at >= 1);
+//                at--;
+//            }
+//            assert(left[at] >= 1);
+//            left[at] -= 1;
+        }
+
         left = pad(left, max_n, max_char);
         right = pad(right, max_n, min_char);
 
@@ -168,7 +188,9 @@ public:
         //e.g left = aaabbb, right = aaaqqq
         //then this checks up to 'aaa'
         while(left[id] == right[id] && id < n) {
-            prefix += left[id];
+            prefix += (char)left[id];
+            assert(!prefix.empty());
+            assert(prefix.size() >= 1);
             if (!contains(prefix)) {
                 breakpoint(false);
                 return false;
@@ -184,14 +206,19 @@ public:
 
         //check first non-boundary divergent character.
         //e.g. aaac, aaad, ... aaap (without aaab, and aaaq)
-        for(char c = (char)((int)left[id]+1); c <= (char)((int)right[id]-1); c++)
-        {
-            string local_prefix = prefix+c;
-            if(contains(local_prefix))
-            {
-                breakpoint(true);
-                return true;
+        if(right[id] >= 1) {
+            for (char c = (char) ((int) left[id] + 1); c <= (char) ((int) right[id] - 1); c++) {
+                string local_prefix = prefix + c;
+                if (contains(local_prefix)) {
+                    breakpoint(true);
+                    return true;
+                }
             }
+        }
+        else
+        {
+            assert(right[id] == 0);
+            assert(right[id] == min_char);
         }
 
 
@@ -268,12 +295,18 @@ public:
                 while (right_id < (int)right.size()) {
                     //check non-boundary characters
                     //aaaqa .. aaaqp
-                    for (char c = (char) ((int) min_char); c <= (char) ((int) right[right_id] - 1); c++) {
-                        string local_prefix = right_prefix + c;
-                        if (contains(local_prefix)) {
-                            breakpoint(true);
-                            return true;
+                    if( right[right_id] >= 1) {
+                        for (char c = (char) ((int) min_char); c <= (char) ((int) right[right_id] - 1); c++) {
+                            string local_prefix = right_prefix + c;
+                            if (contains(local_prefix)) {
+                                breakpoint(true);
+                                return true;
+                            }
                         }
+                    }
+                    else {
+                        assert(right[right_id] == 0);
+                        assert(right[right_id] == min_char);
                     }
                     //check boundary character
                     //aaabb
@@ -308,7 +341,7 @@ public:
 
 
     unsigned long long get_memory() {
-        return pq->get_memory() + 3*sizeof(char) + sizeof(int) + sizeof(long long);
+        return pq->get_memory() + 0*(3*sizeof(char) + sizeof(int) + sizeof(long long));
     }
 
     PointQuery* get_point_query()

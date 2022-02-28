@@ -73,7 +73,7 @@ public:
         }
     }
 
-    void insert(string s) override
+    void insert(const string& s) override
     {
         if(cutoff != -1 && (int)s.size() > cutoff)
         {
@@ -85,7 +85,7 @@ public:
         }
     }
 
-    bool contains(string s) override
+    bool contains(const string& s) override
     {
         if(cutoff != -1 && (int)s.size() > cutoff)
         {

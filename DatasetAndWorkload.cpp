@@ -110,22 +110,18 @@ int DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, const
     cout <<"done shuffling" << endl;
     cout << "splitting" << endl;
 
-    int num_bf_inserts = 0;
     char init_char = (char)127;
+
+
+
     for (size_t i = 0; i < workload_seed_and_dataset.size(); i++) {
-        if (i < workload_seed_and_dataset.size() / 2) {
+        if (i < workload_seed_and_dataset.size() / 2 && workload_difficulty != "impossible") {
             workload_seed.push_back(workload_seed_and_dataset[i]);
         } else {
-            num_bf_inserts+=(int)workload_seed_and_dataset[i].size()+1;
             dataset.push_back(workload_seed_and_dataset[i]);
-            for(size_t j = 0; j < workload_seed_and_dataset[i].size();j++)
-            {
+            for(size_t j = 0; j < workload_seed_and_dataset[i].size();j++){
                 init_char = min(init_char, (char)workload_seed_and_dataset[i][j]);
             }
-        }
-        if((i+1)%10000000 == 0)
-        {
-            cout << "num_split " << i+1 << endl;
         }
     }
 
@@ -208,10 +204,12 @@ int DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, const
 
                 if(left_key >= right_key)
                 {
+                    assert(left_key == right_key);
                     continue;
                 }
                 if(impossible_depth == -1) {
                     left_key += init_char;
+                    assert(right_key[right_key.size() - 1] >= 1);
                     right_key[right_key.size() - 1] -= 1;
                     assert(left_key < right_key);
                 }
@@ -225,9 +223,6 @@ int DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, const
             } else {
                 assert(false);
             }
-            if ((i + 1) % 10000000 == 0) {
-                cout << "num_workloads converted " << i + 1 << endl;
-            }
         }
     }
     else
@@ -235,9 +230,8 @@ int DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, const
         assert(false);
     }
 
-    cout << "workload size " << workload_seed.size() << endl;
+    cout << "workload size " << workload.size() << endl;
     cout << "dataset size " << dataset.size() << endl;
-    cout << "num_bf_inserts " << num_bf_inserts << endl;
 
     int num_negatives = get_negative_workload().size();
 
@@ -256,12 +250,18 @@ int DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, const
     }
     cout << "num_bits_in_dataset " << sum_memory_in_bits << endl;
     cout << "bits_per_key  " << (float)sum_memory_in_bits/dataset.size() << endl;
-
-    return num_bf_inserts;
 }
 
 RangeFilterStats DatasetAndWorkload::eval_point_query(PointQuery *pq) {
     RangeFilterTemplate* rf = new RangeFilterTemplate(*this, pq);
     RangeFilterStats rez = test_range_filter(rf);
     return rez;
+}
+
+int DatasetAndWorkload::get_max_length_of_dataset() {
+    int ret = 0;
+    for(int i = 0;i<dataset.size();i++) {
+        ret = max(ret, (int)dataset[i].size());
+    }
+    return ret;
 }

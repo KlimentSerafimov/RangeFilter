@@ -11,6 +11,8 @@
 // insert function for putting key in Trie
 void Trie::insert(string key){
 
+//    assert(key != "\003\a\002\006\n\006\a\v\t\f\033\023\001\021\035\033" || parent != nullptr);
+
     if(key.empty())
     {
         isleaf = true;
@@ -42,6 +44,9 @@ bool Trie::contains(string key){
     }
 
     // we are at the last character of the string, and current node is a leaf
+    if(curr->isleaf && do_breakpoint) {
+        cout << "here" << endl;
+    }
     return curr->isleaf;
 }
 
@@ -101,6 +106,7 @@ bool Trie::query(string left, string right) {
         }
     }
 
+    assert(right[0] >= 1);
     for(char c = (char)((int)left[0]+1); c <= (char)((int)right[0]-1); c++)
     {
         if(character[(int)c] != nullptr)

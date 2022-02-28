@@ -131,7 +131,7 @@ public:
         return HybridPointQueryParams::clone();
     }
 
-    bool contains(string s) override
+    bool contains(const string& s) override
     {
         assert(invariant());
         bool found = false;
@@ -152,7 +152,7 @@ public:
         return ret;
     }
 
-    void insert(string s) override
+    void insert(const string& s) override
     {
         assert(invariant());
         for(size_t i = 0;i<splits.size();i++) {

@@ -637,7 +637,8 @@ protected:
 public:
     unsigned long long get_memory()
     {
-        return (((int)bit_table_.size())*sizeof(unsigned char)) + ((int)salt_.size())*sizeof(bloom_type) + sizeof(unsigned int) + 4*sizeof(unsigned long) + sizeof(double);
+        return (((int)bit_table_.size())*sizeof(unsigned char)) +
+        0*(((int)salt_.size())*sizeof(bloom_type) + sizeof(unsigned int) + 4*sizeof(unsigned long) + sizeof(double));
     }
 
     unsigned long long get_memory_in_bits()

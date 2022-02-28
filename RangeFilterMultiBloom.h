@@ -222,7 +222,7 @@ public:
         init();
     }
 
-    bool contains(string s) override
+    bool contains(const string& s) override
     {
         if(cutoff != -1 && (int)lvl(s) >= cutoff)
         {
@@ -238,7 +238,7 @@ public:
         }
     }
 
-    void insert(string s ) override
+    void insert(const string& s ) override
     {
         if(cutoff != -1 && (int)lvl(s) >= cutoff)
         {
@@ -259,7 +259,11 @@ public:
         unsigned long long ret = 0;
         for(size_t i = 0;i<bfs.size();i++)
         {
-            ret+=bfs[i].get_memory();
+            float capacity = (1.0-params[i].second)*(float)params[i].first;
+//            cout << params[i].first <<" " << params[i].second << " "<< capacity << endl;
+            if(capacity >= 1.0) {
+                ret += bfs[i].get_memory();
+            }
         }
         return ret + sizeof(vector<bloom_filter>) + 2*sizeof(int) + sizeof(vector<set<string> >) + sizeof(vector<int>) + sizeof(double) +
         sizeof(vector<pair<int, double> >) + params.size()*sizeof(pair<int, double>);

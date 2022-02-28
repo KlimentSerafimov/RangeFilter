@@ -181,7 +181,7 @@ int main_test_surf(DatasetAndWorkload& dataset_and_workload)
 {
 
     Frontier<int> frontier(2);
-    for(int trie_size = 1; trie_size <= 47; trie_size+=1) {
+    for(int trie_size = 1; trie_size <= 55; trie_size+=1) {
         SurfStats surf_ret = test_surf(dataset_and_workload.get_dataset(), dataset_and_workload.get_workload(), trie_size);
 
         cout << surf_ret.to_string() << endl;
@@ -206,8 +206,8 @@ Frontier<PointQuery*>* optimize_base_case(DatasetAndWorkload& dataset_and_worklo
 
 
     int id = 0;
-    int samples = 1000;
     size_t space = dataset_and_workload.get_max_length()*(36);
+    int samples = 100;
     float ratio = (float)samples/space;
     int samples_taken = 0;
 
@@ -220,16 +220,16 @@ Frontier<PointQuery*>* optimize_base_case(DatasetAndWorkload& dataset_and_worklo
             else {
                 continue;
             }
-            cout << "evaluating (sample " << samples_taken << ", id " << id << "): " << cutoff <<" " << fpr << endl;
+//            cout << "evaluating (sample " << samples_taken << ", id " << id << "): " << cutoff <<" " << fpr << endl;
             OneBloom *pq = new OneBloom(dataset_and_workload.get_dataset(), fpr, cutoff);
             RangeFilterStats rez = dataset_and_workload.eval_point_query(pq);
-            cout << "rez = " << rez.get_score_as_vector()[0] <<" " << rez.get_score_as_vector()[1] << endl;
+//            cout << "rez = " << rez.get_score_as_vector()[0] <<" " << rez.get_score_as_vector()[1] << endl;
             ret->insert(pq, rez.get_score_as_vector());
         }
     }
     cout << "TOTAL IDS: " << id << " TOTAL SAMPLES: " << samples_taken << endl;
 
-    ret->print(cout, -1, true);
+    ret->print(cout, 10, true);
 
     cout << "DONE optimize_base_case" << endl << endl;
 
@@ -330,12 +330,14 @@ Frontier<PointQuery*>* construct_hybrid_point_query(DatasetAndWorkload& dataset_
             else {
                 continue;
             }
-            cout << "evaluating (sample " << samples_taken << ", id " << id << ")" << endl;
+//            cout << "evaluating (sample " << samples_taken << ", id " << id << ")" << endl;
             HybridPointQuery* pq = new HybridPointQuery(best_split, left_pq.get_params(), right_pq.get_params());
             RangeFilterStats rez = dataset_and_workload.eval_point_query(pq);
             ret->insert(pq, rez.get_score_as_vector());
         }
     }
+
+    ret->print(cout, 10, true);
 
     cout << "DONE WITH RECURSIVE STEP" << endl;
 
@@ -399,136 +401,7 @@ void eval_rf_heatmap(DatasetAndWorkload& dataset_and_workload)
         if(right_workload.size() >= 2) {
             workloads.push(make_pair(right_workload.size(), right_workload));
         }
-
     }
-//
-//    RichMultiBloom *pq;
-//    bool do_print = true;
-//    pq = new RichMultiBloom(dataset_and_workload, 0.0000000001, -1, do_print);
-//    auto *rf = new RangeFilterTemplate(dataset, negative_workload, pq, do_print);
-//    rf->track_negative_point_queries = true;
-//
-//
-////    cout << endl;
-////    cout << "trie bpk " << (double)(trie.get_memory()*8)/(double)dataset.size() << endl;
-//
-//    int num_positive = 0;
-//    int num_negative = 0;
-//    int num_false_positives = 0;
-//    int num_false_negatives = 0;
-//
-//    int true_positives = 0;
-//    int true_negatives = 0;
-//
-//    for(size_t i = 0;i<negative_workload.size();i++)
-//    {
-//        string left_key = negative_workload[i].first;
-//        string right_key = negative_workload[i].second;
-//
-//        bool ground_truth = contains(dataset, left_key, right_key);
-//
-//        assert(!ground_truth);
-//
-//
-//        bool prediction = rf->query(left_key, right_key);
-//
-//        if(ground_truth)
-//        {
-//            num_positive+=1;
-//            if(!prediction)
-//            {
-//                num_false_negatives+=1;
-//                assert(false);
-//            }
-//            else
-//            {
-//                true_positives+=1;
-//            }
-//        }
-//        else
-//        {
-//            num_negative+=1;
-//            if(prediction)
-//            {
-//                num_false_positives +=1;
-//            }
-//            else
-//            {
-//                true_negatives += 1;
-//            }
-//        }
-//
-//        if((i+1)%1000000 == 0)
-//        {
-//            cout << "tested " << i+1 << "/" << workload.size() << endl;
-//        }
-//    }
-//
-////    assert(num_false_positives == 0);
-//    assert(num_false_negatives == 0);
-//
-//    cout << "all correct" << endl;
-//
-//    cout << "num num_negative_point_queries " << rf->get_negative_point_queries() << " num_negatives " << num_negative << endl;
-//    cout << "num num_negative_point_queries/num_negatives " << (double) rf->get_negative_point_queries() / num_negative << endl;
-//
-//    rf->analyze_negative_point_query_density_heatmap(negative_workload);
-
-    //TRIE
-//50k
-//    easy
-//    num ret_false 24999 num_negatives 24999
-//    num num_negative_point_queries/num_negatives 1
-
-//    medium
-//    num ret_false 23318 num_negatives 21552
-//    num num_negative_point_queries/num_negatives 1.08194
-
-//    hard
-//    num ret_false 16268 num_negatives 12467
-//    num num_negative_point_queries/num_negatives 1.30488
-
-//    impossible
-//    num ret_false 461930 num_negatives 24999
-//    num num_negative_point_queries/num_negatives 18.4779
-
-//RF
-//50k
-//easy
-//    num num_negative_point_queries 24999 num_negatives 24999
-//    num num_negative_point_queries/num_negatives 1
-
-//medium
-//    num num_negative_point_queries 68378 num_negatives 21552
-//    num num_negative_point_queries/num_negatives 3.1727
-
-//hard
-//    num num_negative_point_queries 331456 num_negatives 12467
-//    num num_negative_point_queries/num_negatives 26.5867
-
-//impossible
-//    num num_negative_point_queries 39505877 num_negatives 24999
-//    num num_negative_point_queries/num_negatives 1580.3
-// 0.9  = x^1580
-
-
-//1M
-//    easy
-//    num num_negative_point_queries 499999 num_negatives 499995
-//    num num_negative_point_queries/num_negatives 1.00001
-
-//    medium
-
-//    num num_negative_point_queries 2118338 num_negatives 307724
-//    num num_negative_point_queries/num_negatives 6.88389
-
-//1k impossible
-
-//    num num_negative_point_queries 752820 num_negatives 499
-//    num num_negative_point_queries/num_negatives 1508.66
-
-
-
 }
 
 int main() {
@@ -538,8 +411,8 @@ int main() {
 //    return 0;
 
     string file_folder;
-    string file_name = "50k_dataset.txt";
-    string workload_difficulty = "hybrid"; //choose from "easy", "medium", "hard", "impossible", hybrid
+    string file_name = "100_dataset.txt";
+    string workload_difficulty = "impossible"; //choose from "easy", "medium", "hard", "impossible", hybrid
     string range_filter_type = "multi_bloom"; // choose from "heatmap", "trie", "surf", "one_bloom", "multi_bloom", "hybrid"
     string parameter_search_style = "simulated_annealing"; // choose from "no_search", "grid_search", "simulated_annealing", "dt_style"
 
@@ -547,26 +420,80 @@ int main() {
 
     bool do_extract_dataset = false;
     if (do_extract_dataset) {
-        extract_dataset(file_path, "1k_dataset.txt", 1000);
+        extract_dataset(file_path, "3_dataset.txt", 3);
         return 0;
     }
 
-    DatasetAndWorkload dataset_and_workload(file_path, workload_difficulty);
+    DatasetAndWorkload dataset_and_workload(file_path, workload_difficulty, true);
+
+    bool debug = false;
+    if(debug) {
+        DatasetAndWorkload original_dataset_and_workload(file_path, workload_difficulty, false);
+
+        assert(dataset_and_workload.get_workload().size() == original_dataset_and_workload.get_workload().size());
+        assert(dataset_and_workload.get_dataset().size() == original_dataset_and_workload.get_dataset().size());
+
+
+        GroundTruthPointQuery *original_ground_truth_point_query = new GroundTruthPointQuery();
+        RangeFilterTemplate original_ground_truth =
+                RangeFilterTemplate(original_dataset_and_workload, original_ground_truth_point_query, false);
+
+        GroundTruthPointQuery *ground_truth_point_query = new GroundTruthPointQuery();
+        RangeFilterTemplate ground_truth = RangeFilterTemplate(dataset_and_workload, ground_truth_point_query, false);
+
+        int workload_size = dataset_and_workload.get_workload().size();
+
+        for (int i = 0; i < workload_size; i++) {
+            assert(!original_dataset_and_workload.get_workload()[i].first.empty() &&
+                   !original_dataset_and_workload.get_workload()[i].second.empty());
+            bool original_rez = contains(
+                    original_dataset_and_workload.get_dataset(),
+                    original_dataset_and_workload.get_workload()[i].first,
+                    original_dataset_and_workload.get_workload()[i].second);
+
+            bool translated_rez = contains(
+                    dataset_and_workload.get_dataset(),
+                    dataset_and_workload.get_workload()[i].first,
+                    dataset_and_workload.get_workload()[i].second);
+
+            assert(original_rez == translated_rez);
+
+
+            bool original_rf_rez = original_ground_truth.query(original_dataset_and_workload.get_workload()[i].first,
+                                                               original_dataset_and_workload.get_workload()[i].second);
+
+            assert(original_rf_rez == original_rez);
+
+            bool rf_rez = ground_truth.query(dataset_and_workload.get_workload()[i].first,
+                                             dataset_and_workload.get_workload()[i].second);
+
+
+            if (rf_rez != original_rez) {
+                ground_truth_point_query->trie->do_breakpoint = true;
+
+                ground_truth.query(dataset_and_workload.get_workload()[i].first,
+                                   dataset_and_workload.get_workload()[i].second);
+            }
+
+            assert(rf_rez == original_rez);
+        }
+    }
 
     if(parameter_search_style == "dt_style") {
 
         assert (range_filter_type == "hybrid");
         {
-            PointQuery *ground_truth_point_query = new GroundTruthPointQuery();
-            RangeFilterTemplate ground_truth = RangeFilterTemplate(dataset_and_workload, ground_truth_point_query,
-                                                                   false);
 
             DatasetAndWorkload local_dataset_and_workload(dataset_and_workload.get_dataset(),
                                                           dataset_and_workload.get_negative_workload());
 
+            PointQuery *ground_truth_point_query = new GroundTruthPointQuery();
+            RangeFilterTemplate ground_truth = RangeFilterTemplate(dataset_and_workload, ground_truth_point_query,
+                                                                   false);
+
             Frontier<PointQuery *> *ret = construct_hybrid_point_query(local_dataset_and_workload, ground_truth);
 
-            ofstream dt_out("tree_of_hybrid.out");
+            ofstream dt_out("tree_of_hybrid_d1_1k_impossible.out");
 
             ret->print(dt_out);
 
@@ -612,16 +539,18 @@ int main() {
 void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& output_file)
 {
     const vector<string>& dataset = dataset_and_workload.get_dataset();
-    double seed_fpr = 0.1;
+    double seed_fpr = 0.0000001;
 
-    int seed_cutoff = 7;
+    int seed_cutoff = dataset_and_workload.get_max_length_of_dataset();
     bool do_print = true;
+
 
     vector<string> dim_names;
     dim_names.emplace_back("bpk");
     dim_names.emplace_back("fpr");
 
-    int output_frontier_every = 50;
+    int output_frontier_every = 1000;
+    int hard_copy_every = 2500;
 
     Frontier<RichMultiBloomParams> frontier(2);
 
@@ -632,27 +561,27 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
 
     size_t annealing_epoch = 0;
     size_t iter = 1;
-    RichMultiBloom tmp_rmb_pq = *(RichMultiBloom*)ret.get_params();
-    RichMultiBloomParams tmp_params = *(tmp_rmb_pq.add_iter_and_epoch(iter, annealing_epoch));
-    assert(frontier.insert(*(tmp_params.clone()), ret.get_score_as_vector()));
+    RichMultiBloom& tmp_rmb_pq = *(RichMultiBloom*)ret.get_params();
+    RichMultiBloomParams& tmp_params = *(tmp_rmb_pq.add_iter_and_epoch(iter, annealing_epoch));
+    assert(frontier.insert(tmp_params, ret.get_score_as_vector()));
 
     cout << endl;
     cout << ret.to_string() << endl;
     output_file << ret.to_string() << endl;
 
-    ofstream frontiers("frontiers.out");
+//    ofstream frontiers("frontiers.out");
 
     annealing_epoch+=1;
 
     size_t total_num_inserts = 1;
 
     size_t success_count = 0;
-    size_t explore_more_success_count_threshold = 3;
+    size_t explore_more_success_count_threshold = 2;
 
     size_t stagnation_count = 0;
 
-    const size_t stagnation_count_cutoff_for_annealing_epoch_transition = seed_cutoff; //seed_cutoff*4;
-    const size_t max_reinitialization_count = 1;
+    const size_t stagnation_count_cutoff_for_annealing_epoch_transition = seed_cutoff;
+    const size_t max_reinitialization_count = 2;
 
     while(true)
     {
@@ -676,8 +605,8 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
         cout << "EPOCH " << annealing_epoch << endl;
         output_file << "EPOCH " << annealing_epoch << endl;
 
-        RichMultiBloom local_tmp_rmb_pq = *(RichMultiBloom*)ret.get_params();
-        RichMultiBloomParams local_tmp_params = *local_tmp_rmb_pq.add_iter_and_epoch(iter, annealing_epoch);
+        RichMultiBloom& local_tmp_rmb_pq = *(RichMultiBloom*)ret.get_params();
+        RichMultiBloomParams& local_tmp_params = *local_tmp_rmb_pq.add_iter_and_epoch(iter, annealing_epoch);
         if(frontier.insert(local_tmp_params, ret.get_score_as_vector()))
         {
             success_count+=1;
@@ -777,18 +706,22 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
                 stagnation_count = 0;
                 success_count = 0;
             }
+
         }
+
+//        assert(stagnation_count_cutoff_for_annealing_epoch_transition == 7);
+//        assert(stagnation_count <= stagnation_count_cutoff_for_annealing_epoch_transition);
 
         if(iter % output_frontier_every == 0 || break_asap)
         {
             const vector<FrontierPoint<RichMultiBloomParams> >& vec = frontier.get_frontier();
 
-            frontiers << "ITER " << iter << endl;
-            frontiers << "EPOCH " << annealing_epoch << endl;
-            frontiers << "|inserts| = " << total_num_inserts << endl;
-            frontiers << "|betterment| = " << success_count << endl;
-            frontiers << "|stagnation| = " << stagnation_count << endl;
-            frontiers << "|frontier| = " << frontier.get_size() << endl;
+//            frontiers << "ITER " << iter << endl;
+//            frontiers << "EPOCH " << annealing_epoch << endl;
+//            frontiers << "|inserts| = " << total_num_inserts << endl;
+//            frontiers << "|betterment| = " << success_count << endl;
+//            frontiers << "|stagnation| = " << stagnation_count << endl;
+//            frontiers << "|frontier| = " << frontier.get_size() << endl;
 
             vector<size_t> reinit_counts;
             for(size_t i = 0; i <= max_reinitialization_count+1; i++)
@@ -803,26 +736,16 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
                 reinit_counts[reinit_count]+=1;
             }
 
-            for(size_t i = 0; i <= max_reinitialization_count+1; i++)
-            {
-                if(reinit_counts[i] >= 1) {
-                    frontiers << "|reinit_counts = " << i << "| = " << reinit_counts[i] << endl;
-                }
-            }
-
-
-            for(size_t i = 0;i<vec.size();i++)
-            {
-                frontiers << vec[i].to_string(dim_names) << endl;
-            }
-
-            frontier.print(frontiers, -1, false);
-
-            ofstream latest_frontier("latest_frontier.out");
-            frontier.print(latest_frontier, -1, false);
-            latest_frontier.close();
-
-            frontiers << endl;
+//            for(size_t i = 0; i <= max_reinitialization_count+1; i++){
+//                if(reinit_counts[i] >= 1) {
+//                    frontiers << "|reinit_counts = " << i << "| = " << reinit_counts[i] << endl;
+//                }
+//            }
+//            for(size_t i = 0;i<vec.size();i++){
+//                frontiers << vec[i].to_string(dim_names) << endl;
+//            }
+//            frontier.print(frontiers, -1, false);
+//            frontiers << endl;
 
             if(break_asap)
             {
@@ -830,7 +753,14 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
                 output_file << endl;
                 cout << "BREAK" << endl;
                 output_file << "BREAK" << endl;
+                break;
             }
+        }
+
+        if(iter % hard_copy_every == 0) {
+            ofstream latest_frontier("latest_frontier_impossible100_base128_init0.0000001_reduced_memory_iter" + std::to_string(iter) + ".out");
+            frontier.print(latest_frontier, -1, false);
+            latest_frontier.close();
         }
     }
 

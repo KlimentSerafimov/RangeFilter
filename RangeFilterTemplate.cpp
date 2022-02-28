@@ -11,7 +11,8 @@ void RangeFilterTemplate::calc_metadata(const DatasetAndWorkload &dataset_and_wo
     min_char = dataset_and_workload.get_min_char();
     max_length = dataset_and_workload.get_max_length();
 
-    is_leaf_char = (char) ((int) min_char - 1);
+    is_leaf_char = (char) ((int) max_char + 1);
+    assert((int) is_leaf_char <= 127);
 
     if (do_print) {
         cout << "RANGE FILTER STATS" << endl;
@@ -43,7 +44,8 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(DatasetAndWork
 
     track_negative_point_queries = true;
 
-    for(const auto& it: negative_workload) {
+    for(size_t i = 0;i<negative_workload.size();i++) {
+        auto it = negative_workload[i];
         assert(query(it.first, it.second) == false);
     }
 
@@ -98,8 +100,8 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(DatasetAndWork
         }
     }
 
-    if(!enter)
-    {
+    if(!enter){
+        reset();
         return nullptr;
     }
 
@@ -114,10 +116,14 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(DatasetAndWork
         }
     }
 
-    assert(enter);
+    if(!enter) {
+        reset();
+        return nullptr;
+    }
 
     for(size_t row_id = init_row_id; row_id <= end_row_id; row_id++) {
         while(at_init < inits.size() && inits[at_init].first < dataset[row_id]) {
+            assert(inits[at_init].first <= inits[at_init].second);
             assert(inits[at_init].second < dataset[row_id]);
             at_init++;
         }
@@ -198,10 +204,10 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(DatasetAndWork
 
     pair<double, string>* ret = nullptr;
 
-    while(ret == nullptr && constraint_relaxation_id <= 1) {
+    while(ret == nullptr && constraint_relaxation_id <= 12) {
         vector<double> constraint;
-        constraint.push_back(-1.333);
-        constraint.push_back(1.0 - 0.1/constraint_relaxation_id);
+        constraint.push_back(-10);
+        constraint.push_back(1.0 - 0.3/constraint_relaxation_id);
 
         auto optimization_function = [](vector<double> in) {
             return - in[0] * in[0] * (1 - in[1]);

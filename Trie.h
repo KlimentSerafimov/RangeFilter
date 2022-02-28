@@ -43,6 +43,8 @@ class Trie {
 
 public:
 
+    bool do_breakpoint = false;
+
     void clear()
     {
         for(int i = 0; i< CHAR_SIZE; i++)

@@ -28,12 +28,12 @@ class PointQuery: virtual public PointQueryParams
 {
 public:
     PointQuery(): PointQueryParams() {}
-    virtual bool contains(string s)
+    virtual bool contains(const string& s)
     {
         assert(false);
     }
 
-    virtual void insert(string s)
+    virtual void insert(const string& s)
     {
         assert(false);
     }
