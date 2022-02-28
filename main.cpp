@@ -411,7 +411,7 @@ int main() {
 //    return 0;
 
     string file_folder;
-    string file_name = "100_dataset.txt";
+    string file_name = "1k_dataset.txt";
     string workload_difficulty = "impossible"; //choose from "easy", "medium", "hard", "impossible", hybrid
     string range_filter_type = "multi_bloom"; // choose from "heatmap", "trie", "surf", "one_bloom", "multi_bloom", "hybrid"
     string parameter_search_style = "simulated_annealing"; // choose from "no_search", "grid_search", "simulated_annealing", "dt_style"
@@ -420,11 +420,11 @@ int main() {
 
     bool do_extract_dataset = false;
     if (do_extract_dataset) {
-        extract_dataset(file_path, "3_dataset.txt", 3);
+        extract_dataset(file_path, "6_dataset.txt", 6);
         return 0;
     }
 
-    DatasetAndWorkload dataset_and_workload(file_path, workload_difficulty, true);
+    DatasetAndWorkload dataset_and_workload(file_path, workload_difficulty, false);
 
     bool debug = false;
     if(debug) {
@@ -569,18 +569,18 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
     cout << ret.to_string() << endl;
     output_file << ret.to_string() << endl;
 
-//    ofstream frontiers("frontiers.out");
+    ofstream frontiers("frontiers.out");
 
     annealing_epoch+=1;
 
     size_t total_num_inserts = 1;
 
     size_t success_count = 0;
-    size_t explore_more_success_count_threshold = 2;
+    size_t explore_more_success_count_threshold = 1;
 
     size_t stagnation_count = 0;
 
-    const size_t stagnation_count_cutoff_for_annealing_epoch_transition = seed_cutoff;
+    const size_t stagnation_count_cutoff_for_annealing_epoch_transition = 4;
     const size_t max_reinitialization_count = 2;
 
     while(true)
@@ -644,7 +644,8 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
             cout << "EXPLORE MORE" << endl;
             output_file << "EXPLORE MORE" << endl;
             assert(annealing_epoch >= 2);
-            annealing_epoch = annealing_epoch-1;
+//            annealing_epoch = annealing_epoch-1;
+            annealing_epoch = max((size_t)1, annealing_epoch/2);
             cout << "NEW EPOCH " << annealing_epoch << endl;
             output_file << "NEW EPOCH " << annealing_epoch << endl;
             success_count = 0;
@@ -736,16 +737,16 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
                 reinit_counts[reinit_count]+=1;
             }
 
-//            for(size_t i = 0; i <= max_reinitialization_count+1; i++){
-//                if(reinit_counts[i] >= 1) {
-//                    frontiers << "|reinit_counts = " << i << "| = " << reinit_counts[i] << endl;
-//                }
-//            }
-//            for(size_t i = 0;i<vec.size();i++){
-//                frontiers << vec[i].to_string(dim_names) << endl;
-//            }
-//            frontier.print(frontiers, -1, false);
-//            frontiers << endl;
+            for(size_t i = 0; i <= max_reinitialization_count+1; i++){
+                if(reinit_counts[i] >= 1) {
+                    frontiers << "|reinit_counts = " << i << "| = " << reinit_counts[i] << endl;
+                }
+            }
+            for(size_t i = 0;i<vec.size();i++){
+                frontiers << vec[i].to_string(dim_names) << endl;
+            }
+            frontier.print(frontiers, -1, false);
+            frontiers << endl;
 
             if(break_asap)
             {
@@ -758,7 +759,7 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
         }
 
         if(iter % hard_copy_every == 0) {
-            ofstream latest_frontier("latest_frontier_impossible100_base128_init0.0000001_reduced_memory_iter" + std::to_string(iter) + ".out");
+            ofstream latest_frontier("latest_frontier_impossible1k_base128_init0.0000001_stagcountcutoff6_iter" + std::to_string(iter) + ".out");
             frontier.print(latest_frontier, -1, false);
             latest_frontier.close();
         }

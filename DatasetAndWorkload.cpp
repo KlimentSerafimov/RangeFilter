@@ -103,6 +103,12 @@ int DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, const
 
     workload_seed_and_dataset = read_dataset(file_path);
 
+//    workload_seed_and_dataset.emplace_back("aaabbb");
+//    workload_seed_and_dataset.emplace_back("aaaqqq");
+//    workload_seed_and_dataset.emplace_back("aaazzz");
+//    workload_seed_and_dataset.emplace_back("aaaff");
+//    workload_seed_and_dataset.emplace_back("ccc");
+
     cout << "workload_seed_and_dataset.size() " << workload_seed_and_dataset.size() << endl;
 
     cout <<"shuffling" << endl;
@@ -115,10 +121,13 @@ int DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, const
 
 
     for (size_t i = 0; i < workload_seed_and_dataset.size(); i++) {
-        if (i < workload_seed_and_dataset.size() / 2 && workload_difficulty != "impossible") {
+        if (i < workload_seed_and_dataset.size() / 2
+//        && workload_difficulty != "impossible"
+        ) {
             workload_seed.push_back(workload_seed_and_dataset[i]);
         } else {
             dataset.push_back(workload_seed_and_dataset[i]);
+            assert(!dataset.rbegin()->empty());
             for(size_t j = 0; j < workload_seed_and_dataset[i].size();j++){
                 init_char = min(init_char, (char)workload_seed_and_dataset[i][j]);
             }
@@ -225,31 +234,9 @@ int DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, const
             }
         }
     }
-    else
-    {
+    else {
         assert(false);
     }
-
-    cout << "workload size " << workload.size() << endl;
-    cout << "dataset size " << dataset.size() << endl;
-
-    int num_negatives = get_negative_workload().size();
-
-    cout << "num_negatives " << num_negatives << endl;
-    cout << "num_positives " << workload.size() - num_negatives << endl;
-    cout << "num_negatives(%) " << (float)num_negatives/(float)workload.size()*100.0 << endl;
-
-    long long sum_memory_in_bits = sizeof(dataset);
-    for(size_t i = 0; i<dataset.size();i++)
-    {
-        for(size_t j = 0;j<dataset[i].size();j++)
-        {
-            assert(sizeof(dataset[i][j]) == 1);
-            sum_memory_in_bits+=8*sizeof(dataset[i][j]);
-        }
-    }
-    cout << "num_bits_in_dataset " << sum_memory_in_bits << endl;
-    cout << "bits_per_key  " << (float)sum_memory_in_bits/dataset.size() << endl;
 }
 
 RangeFilterStats DatasetAndWorkload::eval_point_query(PointQuery *pq) {

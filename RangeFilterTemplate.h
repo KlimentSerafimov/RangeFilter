@@ -341,7 +341,7 @@ public:
 
 
     unsigned long long get_memory() {
-        return pq->get_memory() + 0*(3*sizeof(char) + sizeof(int) + sizeof(long long));
+        return pq->get_memory() + (3*sizeof(char) + sizeof(int) + sizeof(long long));
     }
 
     PointQuery* get_point_query()

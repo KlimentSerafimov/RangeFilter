@@ -69,17 +69,17 @@ class DatasetAndWorkload
 
     int num_bits = -1;
 
-    string to_string_base(string str) const
+    string to_string_base(const string& str) const
     {
         assert(num_bits != -1);
         string new_str;
         int num = 0;
         int p = 1<<(num_bits-1);
         int bit_id = 0;
+//        cout << "str: " << str << endl;
         for(auto c: str)
         {
             assert(p>=1);
-//            cout << c;
             if(c == '1')
             {
                 num+=p;
@@ -88,6 +88,8 @@ class DatasetAndWorkload
             {
                 assert(c == '0');
             }
+
+//            cout << c <<" " << num << endl;
             p/=2;
             bit_id++;
             if(bit_id == num_bits)
@@ -101,8 +103,10 @@ class DatasetAndWorkload
             }
 //            new_str += to_binary_string(char_to_id[c], num_bits_per_char);
         }
-        if(bit_id >= 1)
-        new_str+=(char)num;
+        if(bit_id >= 1) {
+//            cout << " = " << num << " last" << endl;
+            new_str += (char) num;
+        }
         return new_str;
     }
 
@@ -110,7 +114,7 @@ class DatasetAndWorkload
     void translate_to_binary()
     {
         assert(_base == 2);
-        int id = 0;
+        int id = 1;
         char prev = 0;
         for(auto c : unique_chars)
         {
@@ -200,7 +204,9 @@ public:
 
         if(do_translate_to_base) {
 
-            size_t num_negative_workload = negative_workload.size();
+            size_t num_negative_workload = get_negative_workload().size();
+
+            DatasetAndWorkload original = DatasetAndWorkload(dataset, workload);
 
             translate_to_binary();
 
@@ -219,7 +225,7 @@ public:
                 process_str(it.second);
             }
 
-            get_negative_workload();
+            get_negative_workload(&original);
 
             assert(num_negative_workload == negative_workload.size());
 
@@ -244,7 +250,7 @@ public:
                 process_str(it.second);
             }
 
-            get_negative_workload();
+            get_negative_workload(&original);
 
             assert(num_negative_workload == negative_workload.size());
         }
@@ -290,7 +296,7 @@ public:
 
     int prep_dataset_and_workload(const string& file_path, const string& workload_difficulty, int impossible_depth = -1);
 
-    const vector<pair<string, string> >& get_negative_workload()
+    const vector<pair<string, string> >& get_negative_workload(DatasetAndWorkload* prev= nullptr)
     {
         if(!negative_workload_defined) {
             for (size_t i = 0; i < workload.size(); i++) {
@@ -298,6 +304,10 @@ public:
                 string right_key = workload[i].second;
 
                 bool ret = contains(dataset, left_key, right_key);
+                if(prev != nullptr) {
+                    bool prev_ret = contains(prev->dataset, prev->workload[i].first, prev->workload[i].second);
+                    assert(ret == prev_ret);
+                }
 
                 if (!ret) {
                     negative_workload.push_back(workload[i]);
