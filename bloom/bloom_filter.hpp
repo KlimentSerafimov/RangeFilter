@@ -27,6 +27,7 @@
 #include <limits>
 #include <string>
 #include <vector>
+#include <iostream>
 
 
 static const std::size_t bits_per_char = 0x08;    // 8 bits in 1 char(unsigned)
@@ -550,6 +551,8 @@ protected:
          std::copy(predef_salt, predef_salt + predef_salt_count, std::back_inserter(salt_));
 
          srand(static_cast<unsigned int>(random_seed_));
+
+         std::cout << random_seed_ << std::endl;
 
          while (salt_.size() < salt_count_)
          {

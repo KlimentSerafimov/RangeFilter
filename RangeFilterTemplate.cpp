@@ -3,6 +3,8 @@
 //
 
 #include "RangeFilterTemplate.h"
+
+#include <utility>
 #include "DatasetAndWorkload.h"
 
 void RangeFilterTemplate::calc_metadata(const DatasetAndWorkload &dataset_and_workload, bool do_print) {
@@ -32,6 +34,17 @@ RangeFilterTemplate::RangeFilterTemplate(const DatasetAndWorkload &dataset_and_w
     calc_metadata(dataset_and_workload, do_print);
     insert_prefixes(dataset_and_workload.get_dataset());
 }
+
+class MyString: public string
+{
+public:
+    MyString(string str) {
+        *this = std::move(str);
+    }
+    string to_string() const {
+        return *this;
+    }
+};
 
 pair<double, string> *
 RangeFilterTemplate::analyze_negative_point_query_density_heatmap(DatasetAndWorkload &dataset_and_workload) {
@@ -83,7 +96,7 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(DatasetAndWork
 
     size_t at_arr = 0;
 
-    Frontier<string> split_size_vs_density_ratio_frontier(2);
+    Frontier<MyString> split_size_vs_density_ratio_frontier(2);
 
     size_t init_row_id = 0;
     size_t end_row_id = dataset.size()-1;
@@ -192,7 +205,7 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(DatasetAndWork
 //            cout << size_ratio << endl;
         multi_d_score.push_back(size_ratio);
 
-        split_size_vs_density_ratio_frontier.insert(dataset[row_id], multi_d_score);
+        split_size_vs_density_ratio_frontier.insert(MyString(dataset[row_id]), multi_d_score);
     }
     out.close();
 
@@ -213,7 +226,7 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(DatasetAndWork
             return - in[0] * in[0] * (1 - in[1]);
         };
 
-        pair<vector<double>, string> *almost_ret = split_size_vs_density_ratio_frontier.get_best_better_than(
+        pair<vector<double>, MyString> *almost_ret = split_size_vs_density_ratio_frontier.get_best_better_than(
                 constraint, optimization_function);
 
         if (almost_ret != nullptr) {

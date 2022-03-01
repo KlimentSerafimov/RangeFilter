@@ -38,7 +38,7 @@ class DatasetAndWorkload
     int num_bits_per_char = -1;
 
     size_t _base = 2;
-    size_t final_base = 128;
+    size_t final_base = 64;
 
     string to_binary_string(int x, size_t n)
     {
@@ -294,7 +294,7 @@ public:
 
     RangeFilterStats eval_point_query(PointQuery* pq);
 
-    int prep_dataset_and_workload(const string& file_path, const string& workload_difficulty, int impossible_depth = -1);
+    void prep_dataset_and_workload(const string& file_path, const string& workload_difficulty, int impossible_depth = -1);
 
     const vector<pair<string, string> >& get_negative_workload(DatasetAndWorkload* prev= nullptr)
     {

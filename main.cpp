@@ -177,11 +177,24 @@ int get_num_negatives(vector<string>& dataset, vector<pair<string, string> >& wo
     return num_negative;
 }
 
+class MyInt
+{
+    int x;
+public:
+    MyInt(int _x): x(_x)
+    {
+    }
+    string to_string() const
+    {
+        return std::to_string(x);
+    }
+};
+
 int main_test_surf(DatasetAndWorkload& dataset_and_workload)
 {
 
-    Frontier<int> frontier(2);
-    for(int trie_size = 1; trie_size <= 55; trie_size+=1) {
+    Frontier<MyInt> frontier(2);
+    for(int trie_size = 1; trie_size <= 64; trie_size+=1) {
         SurfStats surf_ret = test_surf(dataset_and_workload.get_dataset(), dataset_and_workload.get_workload(), trie_size);
 
         cout << surf_ret.to_string() << endl;
@@ -195,14 +208,15 @@ int main_test_surf(DatasetAndWorkload& dataset_and_workload)
     return 0;
 }
 void grid_search(DatasetAndWorkload& dataset_and_workload, const string& range_filter_type, ofstream& output_file);
-void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& output_file);
+Frontier<RichMultiBloomParams>* simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& output_file, ofstream &frontiers, int meta_iter, Frontier<RichMultiBloomParams>* frontier_p = nullptr);
+
 
 #include <queue>
 
-Frontier<PointQuery*>* optimize_base_case(DatasetAndWorkload& dataset_and_workload)
+Frontier<PointQuery>* optimize_base_case(DatasetAndWorkload& dataset_and_workload)
 {
     cout << "ENTERED optimize_base_case " << dataset_and_workload.get_dataset().size() <<" "<< dataset_and_workload.get_workload().size() << endl;
-    Frontier<PointQuery*>* ret = new Frontier<PointQuery*>(2);
+    Frontier<PointQuery>* ret = new Frontier<PointQuery>(2);
 
 
     int id = 0;
@@ -224,7 +238,7 @@ Frontier<PointQuery*>* optimize_base_case(DatasetAndWorkload& dataset_and_worklo
             OneBloom *pq = new OneBloom(dataset_and_workload.get_dataset(), fpr, cutoff);
             RangeFilterStats rez = dataset_and_workload.eval_point_query(pq);
 //            cout << "rez = " << rez.get_score_as_vector()[0] <<" " << rez.get_score_as_vector()[1] << endl;
-            ret->insert(pq, rez.get_score_as_vector());
+            ret->insert(*pq, rez.get_score_as_vector());
         }
     }
     cout << "TOTAL IDS: " << id << " TOTAL SAMPLES: " << samples_taken << endl;
@@ -236,13 +250,13 @@ Frontier<PointQuery*>* optimize_base_case(DatasetAndWorkload& dataset_and_worklo
     return ret;
 }
 
-Frontier<PointQuery*>* construct_hybrid_point_query(DatasetAndWorkload& dataset_and_workload, RangeFilterTemplate& ground_truth)
+Frontier<PointQuery>* construct_hybrid_point_query(DatasetAndWorkload& dataset_and_workload, RangeFilterTemplate& ground_truth)
 {
     assert(!dataset_and_workload.get_workload().empty());
 
     //base case
 
-    Frontier<PointQuery*>* base_case_frontier = optimize_base_case(dataset_and_workload);
+    Frontier<PointQuery>* base_case_frontier = optimize_base_case(dataset_and_workload);
 
     if(dataset_and_workload.get_dataset().size() == 1)
     {
@@ -304,12 +318,12 @@ Frontier<PointQuery*>* construct_hybrid_point_query(DatasetAndWorkload& dataset_
     cout << "RIGHT subproblem: |workload| = " << right_workload.size() << " |dataset| = " << right_workload.size() << endl;
 
     DatasetAndWorkload left_dataset_and_workload(left_dataset, left_workload);
-    Frontier<PointQuery*>* left_frontier = construct_hybrid_point_query(left_dataset_and_workload, ground_truth);
+    Frontier<PointQuery>* left_frontier = construct_hybrid_point_query(left_dataset_and_workload, ground_truth);
 
     DatasetAndWorkload right_dataset_and_workload(right_dataset, right_workload);
-    Frontier<PointQuery*>* right_frontier = construct_hybrid_point_query(right_dataset_and_workload, ground_truth);
+    Frontier<PointQuery>* right_frontier = construct_hybrid_point_query(right_dataset_and_workload, ground_truth);
 
-    Frontier<PointQuery*>* ret = base_case_frontier;
+    Frontier<PointQuery>* ret = base_case_frontier;
 
     cout << "TRYING ALL COMBINATIONS " << left_frontier->get_size() <<" x "<< right_frontier->get_size() << endl;
 
@@ -331,8 +345,8 @@ Frontier<PointQuery*>* construct_hybrid_point_query(DatasetAndWorkload& dataset_
                 continue;
             }
 //            cout << "evaluating (sample " << samples_taken << ", id " << id << ")" << endl;
-            HybridPointQuery* pq = new HybridPointQuery(best_split, left_pq.get_params(), right_pq.get_params());
-            RangeFilterStats rez = dataset_and_workload.eval_point_query(pq);
+            HybridPointQuery pq = HybridPointQuery(best_split, (PointQuery*)&(left_pq->get_params()), (PointQuery*)&(right_pq->get_params()));
+            RangeFilterStats rez = dataset_and_workload.eval_point_query(&pq);
             ret->insert(pq, rez.get_score_as_vector());
         }
     }
@@ -411,10 +425,10 @@ int main() {
 //    return 0;
 
     string file_folder;
-    string file_name = "1k_dataset.txt";
-    string workload_difficulty = "impossible"; //choose from "easy", "medium", "hard", "impossible", hybrid
-    string range_filter_type = "multi_bloom"; // choose from "heatmap", "trie", "surf", "one_bloom", "multi_bloom", "hybrid"
-    string parameter_search_style = "simulated_annealing"; // choose from "no_search", "grid_search", "simulated_annealing", "dt_style"
+    string file_name = "50k_dataset.txt";
+    string workload_difficulty = "hard"; //choose from "easy", "medium", "hard", "impossible", hybrid
+    string range_filter_type = "surf"; // choose from "heatmap", "trie", "surf", "one_bloom", "multi_bloom", "hybrid"
+    string parameter_search_style = "grid_search"; // choose from "no_search", "grid_search", "simulated_annealing", "dt_style"
 
     string file_path = file_folder + file_name;
 
@@ -424,7 +438,7 @@ int main() {
         return 0;
     }
 
-    DatasetAndWorkload dataset_and_workload(file_path, workload_difficulty, false);
+    DatasetAndWorkload dataset_and_workload(file_path, workload_difficulty, true);
 
     bool debug = false;
     if(debug) {
@@ -491,7 +505,7 @@ int main() {
             RangeFilterTemplate ground_truth = RangeFilterTemplate(dataset_and_workload, ground_truth_point_query,
                                                                    false);
 
-            Frontier<PointQuery *> *ret = construct_hybrid_point_query(local_dataset_and_workload, ground_truth);
+            Frontier<PointQuery> *ret = construct_hybrid_point_query(local_dataset_and_workload, ground_truth);
 
             ofstream dt_out("tree_of_hybrid_d1_1k_impossible.out");
 
@@ -526,7 +540,80 @@ int main() {
     else {
         ofstream output_file = ofstream ("results__simulated_annealing.out");
         assert(range_filter_type == "multi_bloom");
-        simulated_annealing(dataset_and_workload, output_file);
+        ofstream frontiers = ofstream ("frontiers.out");
+        int meta_iter = 1;
+
+        bool fresh_init = false;
+
+        Frontier<RichMultiBloomParams>* frontier = new Frontier<RichMultiBloomParams>(2);
+
+        if(fresh_init) {
+            for (double seed_fpr = 0.0001; seed_fpr <= 0.95; seed_fpr = min(seed_fpr + 0.05, seed_fpr * 2)) {
+
+                bool do_print = false;
+                RichMultiBloom *pq = new RichMultiBloom(dataset_and_workload, seed_fpr,
+                                                        dataset_and_workload.get_max_length(), do_print);
+                auto *rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
+                RangeFilterStats ret = dataset_and_workload.test_range_filter(rf, do_print);
+
+                RichMultiBloom &tmp_rmb_pq = *(RichMultiBloom *) ret.get_params();
+                RichMultiBloomParams &tmp_params = *(tmp_rmb_pq.add_iter_and_epoch(1, 0));
+                frontier->insert(tmp_params, ret.get_score_as_vector());
+
+                output_file << ret.to_string() << endl;
+                cout << ret.to_string() << endl;
+            }
+            output_file << "DONE INIT" << endl;
+            cout << "DONE INIT" << endl;
+        }
+
+        else
+        {
+
+            string file_name = "frontier_from_file.out";
+
+            ifstream fin(file_name);
+
+            int line_id = 0;
+            for(string line; getline(fin, line); ) {
+
+                cout << "READING AND PROCESSING line_id " << line_id++ << endl;
+                cout << line << endl;
+
+                bool do_print = false;
+                RichMultiBloom *pq = new RichMultiBloom(dataset_and_workload, line, do_print);
+                auto *rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
+                RangeFilterStats ret = dataset_and_workload.test_range_filter(rf, do_print);
+                RichMultiBloom &tmp_rmb_pq = *(RichMultiBloom *) ret.get_params();
+                RichMultiBloomParams &tmp_params = *(tmp_rmb_pq.add_iter_and_epoch(1, 0));
+                auto new_point = frontier->insert(tmp_params, ret.get_score_as_vector());
+                cout << "RESULT" << endl;
+
+                if(new_point == nullptr)
+                {
+                    cout << "NULLPTR" << endl;
+                    continue;
+                }
+
+                vector<string> dim_names;
+                dim_names.emplace_back("bpk");
+                dim_names.emplace_back("fpr");
+                string result_line = new_point->to_string(dim_names);
+                cout << result_line << endl;
+//                assert(RichMultiBloom::split(result_line, "METAPARAMS")[0] == RichMultiBloom::split(line, "METAPARAMS")[0]);
+            }
+
+            frontier->print(cout);
+
+            meta_iter = 3;
+        }
+
+        cout << "STARTING SIMULATED ANNEALING" << endl;
+
+        while(true) {
+            frontier = simulated_annealing(dataset_and_workload, output_file, frontiers, meta_iter++, frontier);
+            frontiers << "NEW META ITER " << meta_iter << endl;
+        }
         output_file.close();
     }
 
@@ -536,10 +623,10 @@ int main() {
 
 #include "Frontier.h"
 
-void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& output_file)
+Frontier<RichMultiBloomParams>* simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& output_file, ofstream &frontiers, int meta_iter, Frontier<RichMultiBloomParams>* frontier_p)
 {
     const vector<string>& dataset = dataset_and_workload.get_dataset();
-    double seed_fpr = 0.0000001;
+    double seed_fpr = 0.0001;
 
     int seed_cutoff = dataset_and_workload.get_max_length_of_dataset();
     bool do_print = true;
@@ -552,36 +639,58 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
     int output_frontier_every = 1000;
     int hard_copy_every = 2500;
 
-    Frontier<RichMultiBloomParams> frontier(2);
+    if(frontier_p == nullptr) {
+        frontier_p = new Frontier<RichMultiBloomParams>(2);
+    }
+    Frontier<RichMultiBloomParams>& frontier = *frontier_p;
 
-    RichMultiBloom *pq = new RichMultiBloom(dataset_and_workload, seed_fpr, seed_cutoff, do_print);
-    RangeFilterTemplate *rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
+    RichMultiBloom *_pq = new RichMultiBloom(dataset_and_workload, seed_fpr, seed_cutoff, do_print);
+    RangeFilterTemplate *_rf = new RangeFilterTemplate(dataset_and_workload, _pq, do_print);
 
-    RangeFilterStats ret = dataset_and_workload.test_range_filter(rf, do_print);
+    RangeFilterStats _ret = dataset_and_workload.test_range_filter(_rf, do_print);
 
     size_t annealing_epoch = 0;
     size_t iter = 1;
-    RichMultiBloom& tmp_rmb_pq = *(RichMultiBloom*)ret.get_params();
+    RichMultiBloom& tmp_rmb_pq = *(RichMultiBloom*)_ret.get_params();
     RichMultiBloomParams& tmp_params = *(tmp_rmb_pq.add_iter_and_epoch(iter, annealing_epoch));
-    assert(frontier.insert(tmp_params, ret.get_score_as_vector()));
+    frontier.insert(tmp_params, _ret.get_score_as_vector());
 
     cout << endl;
-    cout << ret.to_string() << endl;
-    output_file << ret.to_string() << endl;
+    cout << _ret.to_string() << endl;
+    output_file << _ret.to_string() << endl;
 
-    ofstream frontiers("frontiers.out");
+    RichMultiBloom *pq = nullptr;
+    RangeFilterTemplate *rf = nullptr;
 
+    if(true) {
+        for (const auto &it: frontier.get_frontier()) {
+            ((RichMultiBloomParams *) &it->get_params())->add_iter_and_epoch(1, 0);
+            ((RichMultiBloomParams *) &it->get_params())->reset_reinint_count();
+        }
+
+        assert(frontier.get_size() >= 1);
+
+        pq = new RichMultiBloom(dataset_and_workload, (*frontier.get_frontier().begin())->get_params().get_params(), do_print);
+        rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
+
+    }
+    else
+    {
+        pq = _pq;
+        rf = _rf;
+    }
     annealing_epoch+=1;
 
     size_t total_num_inserts = 1;
 
     size_t success_count = 0;
-    size_t explore_more_success_count_threshold = 1;
+    size_t explore_more_success_count_threshold = 3;
 
     size_t stagnation_count = 0;
 
-    const size_t stagnation_count_cutoff_for_annealing_epoch_transition = 4;
-    const size_t max_reinitialization_count = 2;
+    assert(meta_iter >= 1);
+    const size_t stagnation_count_cutoff_for_annealing_epoch_transition = 3*meta_iter;
+    const size_t max_reinitialization_count = 1;
 
     while(true)
     {
@@ -644,8 +753,8 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
             cout << "EXPLORE MORE" << endl;
             output_file << "EXPLORE MORE" << endl;
             assert(annealing_epoch >= 2);
-//            annealing_epoch = annealing_epoch-1;
-            annealing_epoch = max((size_t)1, annealing_epoch/2);
+            annealing_epoch = annealing_epoch-1;
+//            annealing_epoch = max((size_t)1, annealing_epoch/2);
             cout << "NEW EPOCH " << annealing_epoch << endl;
             output_file << "NEW EPOCH " << annealing_epoch << endl;
             success_count = 0;
@@ -657,7 +766,7 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
             cout << endl;
             output_file << endl;
 
-            vector<FrontierPoint<RichMultiBloomParams> >& vec = frontier.get_frontier_to_modify();
+            vector<FrontierPoint<RichMultiBloomParams>* >& vec = frontier.get_frontier_to_modify();
             pair<size_t, int> oldest_params = make_pair(iter, -1);
 
             for(size_t reinitialization_count = 0;
@@ -671,8 +780,8 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
                     output_file << "MAX_REINITIALIZATION_COUNT " << max_reinitialization_count << endl;
                 }
                 for (size_t i = 0; i < vec.size(); i++) {
-                    if (vec[i].get_params().get_used_for_reinit_count() <= reinitialization_count) {
-                        oldest_params = min(oldest_params, make_pair(vec[i].get_params().get_iter_id(), (int) i));
+                    if (vec[i]->get_params().get_used_for_reinit_count() <= reinitialization_count) {
+                        oldest_params = min(oldest_params, make_pair(vec[i]->get_params().get_iter_id(), (int) i));
                     }
                 }
             }
@@ -690,13 +799,13 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
                 cout << "REINITIALIZE TO" << endl;
                 output_file << "REINITIALIZE TO" << endl;
 
-                cout << vec[oldest_params.second].to_string(dim_names) << endl;
-                output_file << vec[oldest_params.second].to_string(dim_names) << endl;
+                cout << vec[oldest_params.second]->to_string(dim_names) << endl;
+                output_file << vec[oldest_params.second]->to_string(dim_names) << endl;
 
-                pq->reinitialize(vec[oldest_params.second].get_params());
+                pq->reinitialize(vec[oldest_params.second]->get_params());
                 rf->insert_prefixes(dataset);
 
-                RichMultiBloomParams &params = vec[oldest_params.second].get_params_to_modify();
+                RichMultiBloomParams &params = vec[oldest_params.second]->get_params_to_modify();
                 params.used_for_reinit();
 
                 annealing_epoch = params.get_epoch();
@@ -715,14 +824,14 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
 
         if(iter % output_frontier_every == 0 || break_asap)
         {
-            const vector<FrontierPoint<RichMultiBloomParams> >& vec = frontier.get_frontier();
+            const vector<FrontierPoint<RichMultiBloomParams>* >& vec = frontier.get_frontier();
 
-//            frontiers << "ITER " << iter << endl;
-//            frontiers << "EPOCH " << annealing_epoch << endl;
-//            frontiers << "|inserts| = " << total_num_inserts << endl;
-//            frontiers << "|betterment| = " << success_count << endl;
-//            frontiers << "|stagnation| = " << stagnation_count << endl;
-//            frontiers << "|frontier| = " << frontier.get_size() << endl;
+            frontiers << "ITER " << iter << endl;
+            frontiers << "EPOCH " << annealing_epoch << endl;
+            frontiers << "|inserts| = " << total_num_inserts << endl;
+            frontiers << "|betterment| = " << success_count << endl;
+            frontiers << "|stagnation| = " << stagnation_count << endl;
+            frontiers << "|frontier| = " << frontier.get_size() << endl;
 
             vector<size_t> reinit_counts;
             for(size_t i = 0; i <= max_reinitialization_count+1; i++)
@@ -732,7 +841,7 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
 
             for(size_t i = 0;i<vec.size();i++)
             {
-                size_t reinit_count = vec[i].get_params().get_used_for_reinit_count();
+                size_t reinit_count = vec[i]->get_params().get_used_for_reinit_count();
                 assert(reinit_count <= reinit_counts.size());
                 reinit_counts[reinit_count]+=1;
             }
@@ -743,8 +852,9 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
                 }
             }
             for(size_t i = 0;i<vec.size();i++){
-                frontiers << vec[i].to_string(dim_names) << endl;
+                frontiers << vec[i]->to_string(dim_names) << endl;
             }
+
             frontier.print(frontiers, -1, false);
             frontiers << endl;
 
@@ -754,12 +864,13 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
                 output_file << endl;
                 cout << "BREAK" << endl;
                 output_file << "BREAK" << endl;
+                frontiers << "BREAK" << endl;
                 break;
             }
         }
 
         if(iter % hard_copy_every == 0) {
-            ofstream latest_frontier("latest_frontier_impossible1k_base128_init0.0000001_stagcountcutoff6_iter" + std::to_string(iter) + ".out");
+            ofstream latest_frontier("latest_frontier_hard50k_iter" + std::to_string(iter) + "_metaiter"+std::to_string(meta_iter)+".out");
             frontier.print(latest_frontier, -1, false);
             latest_frontier.close();
         }
@@ -767,6 +878,9 @@ void simulated_annealing(DatasetAndWorkload& dataset_and_workload, ofstream& out
 
     cout << "DONE" << endl;
     output_file << "DONE" << endl;
+    frontiers << "DONE" << endl;
+
+    return frontier_p;
 }
 
 void grid_search(DatasetAndWorkload& dataset_and_workload, const string& _range_filter_type, ofstream& output_file){

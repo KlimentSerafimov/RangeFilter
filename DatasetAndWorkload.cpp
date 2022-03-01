@@ -95,7 +95,7 @@ vector<string> read_dataset(const string& file_path)
     return dataset;
 }
 
-int DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, const string& workload_difficulty, int impossible_depth)
+void DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, const string& workload_difficulty, int impossible_depth)
 {
 
     vector<string> workload_seed;
@@ -247,7 +247,7 @@ RangeFilterStats DatasetAndWorkload::eval_point_query(PointQuery *pq) {
 
 int DatasetAndWorkload::get_max_length_of_dataset() {
     int ret = 0;
-    for(int i = 0;i<dataset.size();i++) {
+    for(size_t i = 0;i<dataset.size();i++) {
         ret = max(ret, (int)dataset[i].size());
     }
     return ret;

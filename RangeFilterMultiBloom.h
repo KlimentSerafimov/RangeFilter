@@ -103,6 +103,10 @@ public:
     size_t get_epoch() const {
         return epoch_id;
     }
+
+    void reset_reinint_count() {
+        used_for_reinit_count = 0;
+    }
 };
 
 
@@ -170,6 +174,8 @@ private:
         }
     }
 
+
+
 protected:
     static size_t lvl(const string& s)
     {
@@ -194,6 +200,60 @@ protected:
     }
 
 public:
+    static vector<string> split(string str, const string& delim)
+    {
+        vector<string> ret;
+        while(str.find(delim) != std::string::npos)
+        {
+            if(str.find(delim) >= 1) {
+                ret.push_back(str.substr(0, str.find(delim)));
+            }
+            str = str.substr(str.find(delim)+delim.size(), str.size()-(str.find(delim)+delim.size()));
+        }
+        if(!str.empty()){
+            ret.push_back(str);
+        }
+        return ret;
+    }
+
+    static void erase_substr(string& str, const string& to_erase)
+    {
+        assert(str.find(to_erase) != std::string::npos);
+        size_t init_id = str.find(to_erase);
+        str.erase(init_id, to_erase.size());
+    }
+
+    static vector<pair<int, double> > init_from_string(const string& line) {
+        vector<string> score_and_meta_params = split(line, "METAPARAMS");
+        assert(score_and_meta_params.size() == 2);
+        vector<string> meta_params_and_params = split(score_and_meta_params[1], "PARAMS\t");
+        assert(meta_params_and_params.size() == 2);
+        vector<string> _params = split(meta_params_and_params[1], "lvl");
+        assert(_params.size() == 29);
+        vector<pair<int, double> > params;
+        for(auto param : _params)
+        {
+            erase_substr(param, " fpr");
+            erase_substr(param, ")");
+//                cout << param << endl;
+
+
+            vector<string> id_and_param = split(param, "(keys ");
+            assert(id_and_param.size() == 2);
+
+            vector<string> param_parts = split(id_and_param[1], ",");
+
+            assert(param_parts.size() == 2);
+//                char char_array[param_parts[0].size()];
+//                strcpy(char_array, param_parts[0].c_str());
+            params.emplace_back(
+                    std::atoi(param_parts[0].c_str()),
+                    stod(param_parts[1])
+
+            );
+        }
+        return params;
+    }
 
     MultiBloomParams* clone() const override
     {
@@ -204,6 +264,7 @@ public:
 
     MultiBloom(const vector<string>& dataset, double _seed_fpr, int _cutoff = -1, bool do_print = false):
     seed_fpr(_seed_fpr), cutoff(_cutoff){
+        assert(cutoff != -1);
 //        for(int i = 0;i<dataset.size();i++)
 //        {
 //            cout << dataset[i] << endl;
@@ -218,6 +279,34 @@ public:
         for(size_t i = 0;i<max_lvl;i++){
             params.emplace_back(num_prefixes_per_level[i]+min_num_elements, seed_fpr);
         }
+
+        init();
+    }
+
+    MultiBloom(const vector<string>& dataset, vector<pair<int, double> > _params, bool do_print = false) {
+        calc_metadata(dataset, do_print);
+//        size_t max_lvl = num_prefixes_per_level.size();
+//        if(cutoff != -1)
+//        {
+//            max_lvl = (size_t)cutoff;
+//        }
+//        for(size_t i = 0;i<max_lvl;i++){
+//            params.emplace_back(num_prefixes_per_level[i], seed_fpr);
+//        }
+
+        params = _params;
+        cutoff = _params.size();
+
+        init();
+    }
+
+
+
+    MultiBloom(const vector<string>& dataset, const string& line, bool do_print = false) {
+        calc_metadata(dataset, do_print);
+
+        params = init_from_string(line);
+        cutoff = params.size();
 
         init();
     }
@@ -306,6 +395,10 @@ public:
 
     RichMultiBloom(const DatasetAndWorkload& dataset_and_workload, double _seed_fpr,
                    int _cutoff = -1, bool do_print = false);
+
+    RichMultiBloom(const DatasetAndWorkload& dataset_and_workload, const string& file_name, bool do_print = false);
+
+    RichMultiBloom(const DatasetAndWorkload& dataset_and_workload, vector<pair<int, double> > _params, bool do_print = false);
 
     void reinitialize(const RichMultiBloomParams& new_params)
     {
