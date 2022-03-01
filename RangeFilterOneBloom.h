@@ -18,6 +18,7 @@ using namespace std;
 
 class OneBloomParams: public PointQueryParams
 {
+protected:
     double seed_fpr;
     int cutoff;
 public:
@@ -28,14 +29,12 @@ public:
     }
 };
 
-class OneBloom: public PointQuery
+class OneBloom: public OneBloomParams, public PointQuery
 {
     bloom_filter bf;
     bool bf_defined = false;
 
     long long total_num_chars{};
-    double seed_fpr;
-    int cutoff;
 
     void calc_metadata(const vector<string>& dataset, bool do_print)
     {
@@ -64,13 +63,18 @@ class OneBloom: public PointQuery
 public:
 
     OneBloom(const vector<string>& dataset, double _seed_fpr, int _cutoff, bool do_print = false):
-    seed_fpr(_seed_fpr), cutoff(_cutoff){
+            OneBloomParams(_seed_fpr, _cutoff){
         calc_metadata(dataset, do_print);
         if(total_num_chars > 0) {
             bloom_parameters params = get_bloom_parameters(total_num_chars, seed_fpr);
             bf = bloom_filter(params);
             bf_defined = true;
         }
+    }
+
+    string to_string() const override
+    {
+        return OneBloomParams::to_string();
     }
 
     void insert(const string& s) override
@@ -87,14 +91,17 @@ public:
 
     bool contains(const string& s) override
     {
+        bool ret = true;
         if(cutoff != -1 && (int)s.size() > cutoff)
         {
-            return true;
+            ret = true;
         }
         else {
             assert(bf_defined);
-            return bf.contains(s);
+            ret = bf.contains(s);
         }
+        PointQuery::memoize_contains(s, ret);
+        return ret;
     }
 
     unsigned long long get_memory() override{

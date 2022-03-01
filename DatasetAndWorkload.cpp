@@ -7,7 +7,7 @@
 #include "RangeFilterTemplate.h"
 
 RangeFilterStats
-DatasetAndWorkload::test_range_filter(RangeFilterTemplate *rf, bool do_print)
+DatasetAndWorkload::test_range_filter(RangeFilterTemplate *rf, bool do_print) const
 {
     int num_positive = 0;
     int num_negative = 0;
@@ -65,7 +65,6 @@ DatasetAndWorkload::test_range_filter(RangeFilterTemplate *rf, bool do_print)
             num_false_positives,
             num_negative,
             (int)rf->get_memory()*8);
-
 
     return ret;
 }
@@ -239,7 +238,7 @@ void DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, cons
     }
 }
 
-RangeFilterStats DatasetAndWorkload::eval_point_query(PointQuery *pq) {
+RangeFilterStats DatasetAndWorkload::eval_point_query(PointQuery *pq) const {
     RangeFilterTemplate* rf = new RangeFilterTemplate(*this, pq);
     RangeFilterStats rez = test_range_filter(rf);
     return rez;
@@ -251,4 +250,9 @@ int DatasetAndWorkload::get_max_length_of_dataset() {
         ret = max(ret, (int)dataset[i].size());
     }
     return ret;
+}
+
+const vector<pair<string, string> > &DatasetAndWorkload::get_negative_workload_assert_has() const {
+    assert(negative_workload_defined);
+    return negative_workload;
 }

@@ -213,19 +213,38 @@ Frontier<RichMultiBloomParams>* simulated_annealing(DatasetAndWorkload& dataset_
 
 #include <queue>
 
-Frontier<PointQuery>* optimize_base_case(DatasetAndWorkload& dataset_and_workload)
+class PointQueryPointer
+{
+    PointQuery* pq;
+
+public:
+    string to_string() const
+    {
+        assert(pq != nullptr);
+        return pq->to_string();
+    }
+
+    PointQueryPointer(PointQuery* _pq): pq(_pq) {}
+
+    PointQuery* get_pq() const
+    {
+        return pq;
+    }
+};
+
+Frontier<PointQueryPointer>* optimize_base_case(const DatasetAndWorkload& dataset_and_workload)
 {
     cout << "ENTERED optimize_base_case " << dataset_and_workload.get_dataset().size() <<" "<< dataset_and_workload.get_workload().size() << endl;
-    Frontier<PointQuery>* ret = new Frontier<PointQuery>(2);
+    Frontier<PointQueryPointer>* ret = new Frontier<PointQueryPointer>(2);
 
 
     int id = 0;
     size_t space = dataset_and_workload.get_max_length()*(36);
-    int samples = 100;
+    int samples = 333;
     float ratio = (float)samples/space;
     int samples_taken = 0;
 
-    for(size_t cutoff = 1; cutoff < dataset_and_workload.get_max_length(); cutoff++) {
+    for(int cutoff = 1; cutoff < (int)dataset_and_workload.get_max_length(); cutoff++) {
         for(float fpr = 0.0001; fpr < 1; fpr = min(fpr+0.05, fpr*1.5)) {
             id++;
             if(rand()%1000 < ratio*1000){
@@ -238,9 +257,11 @@ Frontier<PointQuery>* optimize_base_case(DatasetAndWorkload& dataset_and_workloa
             OneBloom *pq = new OneBloom(dataset_and_workload.get_dataset(), fpr, cutoff);
             RangeFilterStats rez = dataset_and_workload.eval_point_query(pq);
 //            cout << "rez = " << rez.get_score_as_vector()[0] <<" " << rez.get_score_as_vector()[1] << endl;
-            ret->insert(*pq, rez.get_score_as_vector());
+            ret->insert(PointQueryPointer(pq), rez.get_score_as_vector());
         }
     }
+
+
     cout << "TOTAL IDS: " << id << " TOTAL SAMPLES: " << samples_taken << endl;
 
     ret->print(cout, 10, true);
@@ -250,13 +271,21 @@ Frontier<PointQuery>* optimize_base_case(DatasetAndWorkload& dataset_and_workloa
     return ret;
 }
 
-Frontier<PointQuery>* construct_hybrid_point_query(DatasetAndWorkload& dataset_and_workload, RangeFilterTemplate& ground_truth)
+
+Frontier<PointQueryPointer>* construct_hybrid_point_query(
+        const DatasetAndWorkload& dataset_and_workload, RangeFilterTemplate& ground_truth, vector<string> path)
 {
     assert(!dataset_and_workload.get_workload().empty());
 
     //base case
 
-    Frontier<PointQuery>* base_case_frontier = optimize_base_case(dataset_and_workload);
+    cout << "OPTIMIZING BASE CASE OF PATH" << endl;
+    for(const auto& it: path) {
+        cout << it;
+    }
+    cout << endl;
+
+    Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload);
 
     if(dataset_and_workload.get_dataset().size() == 1)
     {
@@ -289,10 +318,16 @@ Frontier<PointQuery>* construct_hybrid_point_query(DatasetAndWorkload& dataset_a
     const vector<pair<string, string> >& local_workload = dataset_and_workload.get_workload();
 
     for (size_t i = 0; i < local_workload.size(); i++) {
-        if (local_workload[i].second <= best_split) {
+        assert(local_workload[i].second != best_split);
+        assert(local_workload[i].first != best_split);
+        assert(local_workload[i].first <= local_workload[i].second);
+        if (local_workload[i].second < best_split) {
             left_workload.push_back(local_workload[i]);
-        } else {
+        } else if(local_workload[i].first > best_split){
             right_workload.push_back(local_workload[i]);
+        }
+        else {
+            assert(false);
         }
     }
 
@@ -307,9 +342,15 @@ Frontier<PointQuery>* construct_hybrid_point_query(DatasetAndWorkload& dataset_a
     const vector<string>& local_dataset = dataset_and_workload.get_dataset();
 
     for (size_t i = 0; i < local_dataset.size(); i++) {
-        if (local_dataset[i] <= best_split) {
+        if (local_dataset[i] < best_split) {
             left_dataset.push_back(local_dataset[i]);
-        } else {
+        } else if (local_dataset[i] > best_split) {
+            right_dataset.push_back(local_dataset[i]);
+        }
+        else
+        {
+            assert(local_dataset[i] == best_split);
+            left_dataset.push_back(local_dataset[i]);
             right_dataset.push_back(local_dataset[i]);
         }
     }
@@ -317,25 +358,37 @@ Frontier<PointQuery>* construct_hybrid_point_query(DatasetAndWorkload& dataset_a
     cout << "LEFT subproblem: |workload| = " << left_workload.size() << " |dataset| = " << left_dataset.size() << endl;
     cout << "RIGHT subproblem: |workload| = " << right_workload.size() << " |dataset| = " << right_workload.size() << endl;
 
-    DatasetAndWorkload left_dataset_and_workload(left_dataset, left_workload);
-    Frontier<PointQuery>* left_frontier = construct_hybrid_point_query(left_dataset_and_workload, ground_truth);
+    DatasetAndWorkload left_dataset_and_workload(left_dataset, left_workload, dataset_and_workload);
+    path.push_back("L");
+    left_dataset_and_workload.get_negative_workload();
+    Frontier<PointQueryPointer>* left_frontier = construct_hybrid_point_query(left_dataset_and_workload, ground_truth, path);
+    path.pop_back();
 
-    DatasetAndWorkload right_dataset_and_workload(right_dataset, right_workload);
-    Frontier<PointQuery>* right_frontier = construct_hybrid_point_query(right_dataset_and_workload, ground_truth);
+    path.push_back("R");
+    DatasetAndWorkload right_dataset_and_workload(right_dataset, right_workload, dataset_and_workload);
+    right_dataset_and_workload.get_negative_workload();
+    Frontier<PointQueryPointer>* right_frontier = construct_hybrid_point_query(right_dataset_and_workload, ground_truth, path);
+    path.pop_back();
 
-    Frontier<PointQuery>* ret = base_case_frontier;
+    Frontier<PointQueryPointer>* ret = base_case_frontier;
 
     cout << "TRYING ALL COMBINATIONS " << left_frontier->get_size() <<" x "<< right_frontier->get_size() << endl;
 
+    cout << "OF PATH" << endl;
+    for(const auto& it: path) {
+        cout << it;
+    }
+    cout << endl;
+
     int id = 0;
-    int samples = 2000;
     size_t space = left_frontier->get_size() * right_frontier->get_size() ;
+    int samples = 30000;
     float ratio = (float)samples/space;
     int samples_taken = 0;
 
-    for(const auto& left_pq : left_frontier->get_frontier())
+    for(const FrontierPoint<PointQueryPointer>* left_pq: left_frontier->get_frontier())
     {
-        for(const auto& right_pq: right_frontier->get_frontier())
+        for(const FrontierPoint<PointQueryPointer>* right_pq: right_frontier->get_frontier())
         {
             id++;
             if(rand()%1000 < ratio*1000){
@@ -345,9 +398,33 @@ Frontier<PointQuery>* construct_hybrid_point_query(DatasetAndWorkload& dataset_a
                 continue;
             }
 //            cout << "evaluating (sample " << samples_taken << ", id " << id << ")" << endl;
-            HybridPointQuery pq = HybridPointQuery(best_split, (PointQuery*)&(left_pq->get_params()), (PointQuery*)&(right_pq->get_params()));
-            RangeFilterStats rez = dataset_and_workload.eval_point_query(&pq);
-            ret->insert(pq, rez.get_score_as_vector());
+//            left_pq->get_params().get_pq()->assert_contains = true;
+//            right_pq->get_params().get_pq()->assert_contains = true;
+
+            HybridPointQuery* pq = new HybridPointQuery(best_split, dataset_and_workload.original_meta_data, left_pq->get_params().get_pq(), right_pq->get_params().get_pq());
+//            RangeFilterStats rez1 = dataset_and_workload.eval_point_query(pq);
+
+            int num_negatives =
+                    left_pq->get_params().get_pq()->get_num_negatives() +
+                    right_pq->get_params().get_pq()->get_num_negatives();
+            assert(num_negatives == (int)dataset_and_workload.get_negative_workload_assert_has().size());
+
+            RangeFilterStats rez2(
+                    pq,
+                    (int)dataset_and_workload.get_dataset().size(),
+                    (int)dataset_and_workload.get_workload().size(),
+                    left_pq->get_params().get_pq()->get_num_false_positives() +
+                    right_pq->get_params().get_pq()->get_num_false_positives(),
+                    num_negatives,
+                    (int)pq->get_memory()*8);
+
+
+//            if(!(rez1 == rez2))
+//            {
+//                assert(rez1.get_num_false_positives() - 1 == rez2.get_num_false_positives());
+//            }
+
+            ret->insert(PointQueryPointer(pq), rez2.get_score_as_vector());
         }
     }
 
@@ -427,8 +504,8 @@ int main() {
     string file_folder;
     string file_name = "50k_dataset.txt";
     string workload_difficulty = "hard"; //choose from "easy", "medium", "hard", "impossible", hybrid
-    string range_filter_type = "surf"; // choose from "heatmap", "trie", "surf", "one_bloom", "multi_bloom", "hybrid"
-    string parameter_search_style = "grid_search"; // choose from "no_search", "grid_search", "simulated_annealing", "dt_style"
+    string range_filter_type = "hybrid"; // choose from "heatmap", "trie", "surf", "one_bloom", "multi_bloom", "hybrid"
+    string parameter_search_style = "dt_style"; // choose from "no_search", "grid_search", "simulated_annealing", "dt_style"
 
     string file_path = file_folder + file_name;
 
@@ -499,15 +576,17 @@ int main() {
         {
 
             DatasetAndWorkload local_dataset_and_workload(dataset_and_workload.get_dataset(),
-                                                          dataset_and_workload.get_negative_workload());
+                                                          dataset_and_workload.get_negative_workload(),
+                                                          dataset_and_workload);
 
             PointQuery *ground_truth_point_query = new GroundTruthPointQuery();
             RangeFilterTemplate ground_truth = RangeFilterTemplate(dataset_and_workload, ground_truth_point_query,
                                                                    false);
 
-            Frontier<PointQuery> *ret = construct_hybrid_point_query(local_dataset_and_workload, ground_truth);
+            local_dataset_and_workload.get_negative_workload();
+            Frontier<PointQueryPointer> *ret = construct_hybrid_point_query(local_dataset_and_workload, ground_truth, vector<string>(1, "root"));
 
-            ofstream dt_out("tree_of_hybrid_d1_1k_impossible.out");
+            ofstream dt_out("tree_of_hybrid_hard50k_cutoff1.3__faster_cross.out");
 
             ret->print(dt_out);
 
@@ -870,7 +949,7 @@ Frontier<RichMultiBloomParams>* simulated_annealing(DatasetAndWorkload& dataset_
         }
 
         if(iter % hard_copy_every == 0) {
-            ofstream latest_frontier("latest_frontier_hard50k_iter" + std::to_string(iter) + "_metaiter"+std::to_string(meta_iter)+".out");
+            ofstream latest_frontier("latest_frontier_hard1k_iter" + std::to_string(iter) + "_metaiter"+std::to_string(meta_iter)+".out");
             frontier.print(latest_frontier, -1, false);
             latest_frontier.close();
         }
@@ -919,11 +998,12 @@ void grid_search(DatasetAndWorkload& dataset_and_workload, const string& _range_
                             continue;
                         }
                         PointQuery *pq;
-                        pq = new HybridPointQuery(dataset, "kirk", left_cutoff, left_fpr, right_cutoff, right_fpr, do_print);
+                        pq = new HybridPointQuery(dataset_and_workload, "kirk", left_cutoff, left_fpr, right_cutoff, right_fpr, do_print);
                         auto *rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
                         RangeFilterStats ret = dataset_and_workload.test_range_filter(rf, do_print);
-                        HybridPointQueryParams *params = (HybridPointQueryParams *) ret.get_params();
-                        frontier.insert(*(params->clone()), ret.get_score_as_vector());
+//                        HybridPointQueryParams *params = (HybridPointQueryParams *) ret.get_params();
+                        HybridPointQuery& local_tmp_rmb_pq = *((HybridPointQuery*)ret.get_params());
+                        frontier.insert(local_tmp_rmb_pq, ret.get_score_as_vector());
                         output_file << ret.to_string() << endl;
                         cout << ret.to_string() << endl;
                         cout << "DONE" << endl;

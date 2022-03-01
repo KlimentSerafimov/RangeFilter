@@ -20,6 +20,8 @@
 
 using namespace std;
 
+class DatasetAndWorkloadMetaData;
+
 class DatasetAndWorkload;
 
 class GroundTruthPointQuery: public PointQuery
@@ -76,17 +78,17 @@ private:
         num_negative_point_queries = 0;
     }
 
-    bool contains(const string& s)
+    bool contains(const string& s, const string& left_str, const string& right_str)
     {
         if(s.empty())
         {
             return true;
         }
-        bool ret = pq->contains(s);
+        bool ret = pq->contains(s, left_str, right_str);
         if(track_negative_point_queries) {
             if (!ret) {
                 string sub_s = s.substr(0, s.size() - 1);
-                assert(contains(sub_s));
+                assert(contains(sub_s, left_str, right_str));
 
                 const string& record_s = s;
 
@@ -191,7 +193,7 @@ public:
             prefix += (char)left[id];
             assert(!prefix.empty());
             assert(prefix.size() >= 1);
-            if (!contains(prefix)) {
+            if (!contains(prefix, left, right)) {
                 breakpoint(false);
                 return false;
             }
@@ -209,7 +211,7 @@ public:
         if(right[id] >= 1) {
             for (char c = (char) ((int) left[id] + 1); c <= (char) ((int) right[id] - 1); c++) {
                 string local_prefix = prefix + c;
-                if (contains(local_prefix)) {
+                if (contains(local_prefix, left, right)) {
                     breakpoint(true);
                     return true;
                 }
@@ -228,7 +230,7 @@ public:
             //e.g. aaab
             string left_prefix = prefix + left[id];
             bool continue_left = false;
-            if (contains(left_prefix)) {
+            if (contains(left_prefix, left, right)) {
                 continue_left = true;
             }
             if (continue_left) {
@@ -241,7 +243,7 @@ public:
                     //aaabc .. aaabz
                     for (char c = (char) ((int) left[left_id] + 1); c <= (char) ((int) max_char); c++) {
                         string local_prefix = left_prefix + c;
-                        if (contains(local_prefix)) {
+                        if (contains(local_prefix, left, right)) {
                             breakpoint(true);
                             return true;
                         }
@@ -249,7 +251,7 @@ public:
                     //check boundary character
                     //aaabb
                     left_prefix += left[left_id];
-                    if (contains(left_prefix)) {
+                    if (contains(left_prefix, left, right)) {
                         continue_left = true;
                         //continue checking
                     } else {
@@ -275,9 +277,9 @@ public:
             //e.g. aaaq
             string right_prefix = prefix + right[id];
             bool continue_right = false;
-            if (contains(right_prefix)) {
+            if (contains(right_prefix, left, right)) {
                 string next_right_prefix = right_prefix+is_leaf_char;
-                if(contains(next_right_prefix))
+                if(contains(next_right_prefix, left, right))
                 {
                     //right_prefix is a leaf;
                     breakpoint(true);
@@ -298,7 +300,7 @@ public:
                     if( right[right_id] >= 1) {
                         for (char c = (char) ((int) min_char); c <= (char) ((int) right[right_id] - 1); c++) {
                             string local_prefix = right_prefix + c;
-                            if (contains(local_prefix)) {
+                            if (contains(local_prefix, left, right)) {
                                 breakpoint(true);
                                 return true;
                             }
@@ -311,9 +313,9 @@ public:
                     //check boundary character
                     //aaabb
                     right_prefix += right[right_id];
-                    if (contains(right_prefix)) {
+                    if (contains(right_prefix, left, right)) {
                         continue_right = true;
-                        if(contains(right_prefix+is_leaf_char))
+                        if(contains(right_prefix+is_leaf_char, left, right))
                         {
                             //right_prefix is a leaf;
                             breakpoint(true);
@@ -341,7 +343,7 @@ public:
 
 
     unsigned long long get_memory() {
-        return pq->get_memory() + (3*sizeof(char) + sizeof(int) + sizeof(long long));
+        return pq->get_memory() + 0*((3*sizeof(char) + sizeof(int) + sizeof(long long)));
     }
 
     PointQuery* get_point_query()
@@ -357,7 +359,7 @@ public:
         return num_negative_point_queries;
     }
 
-    pair<double, string>* analyze_negative_point_query_density_heatmap(DatasetAndWorkload& dataset_and_workload);
+    pair<double, string>* analyze_negative_point_query_density_heatmap(const DatasetAndWorkload& dataset_and_workload);
 };
 
 

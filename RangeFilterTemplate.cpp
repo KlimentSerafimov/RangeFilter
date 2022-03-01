@@ -7,6 +7,7 @@
 #include <utility>
 #include "DatasetAndWorkload.h"
 
+
 void RangeFilterTemplate::calc_metadata(const DatasetAndWorkload &dataset_and_workload, bool do_print) {
 
     max_char = dataset_and_workload.get_max_char();
@@ -38,22 +39,20 @@ RangeFilterTemplate::RangeFilterTemplate(const DatasetAndWorkload &dataset_and_w
 class MyString: public string
 {
 public:
-    MyString(string str) {
-        *this = std::move(str);
-    }
+    MyString(string str): string(std::move(str)) {}
     string to_string() const {
         return *this;
     }
 };
 
 pair<double, string> *
-RangeFilterTemplate::analyze_negative_point_query_density_heatmap(DatasetAndWorkload &dataset_and_workload) {
+RangeFilterTemplate::analyze_negative_point_query_density_heatmap(const DatasetAndWorkload &dataset_and_workload) {
     assert(!track_negative_point_queries);
 
     const vector<string>& dataset = dataset_and_workload.get_dataset();
     const vector<pair<string, string> >& negative_workload = dataset_and_workload.get_workload();
 
-    assert(negative_workload == dataset_and_workload.get_negative_workload());
+    assert(negative_workload == dataset_and_workload.get_negative_workload_assert_has());
 
     track_negative_point_queries = true;
 
@@ -217,10 +216,10 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(DatasetAndWork
 
     pair<double, string>* ret = nullptr;
 
-    while(ret == nullptr && constraint_relaxation_id <= 12) {
+    while(ret == nullptr && constraint_relaxation_id <= 3) {
         vector<double> constraint;
-        constraint.push_back(-10);
-        constraint.push_back(1.0 - 0.3/constraint_relaxation_id);
+        constraint.push_back(-1 - 0.06*constraint_relaxation_id);
+        constraint.push_back(1.0 - 0.4/(1<<constraint_relaxation_id));
 
         auto optimization_function = [](vector<double> in) {
             return - in[0] * in[0] * (1 - in[1]);
