@@ -135,7 +135,6 @@ class Frontier
     vector<FrontierPoint<ParamsType>* > frontier;
     size_t num_erased = 0;
 
-
 /**
     def remove_erased(self):
         new_frontier = []
@@ -144,7 +143,7 @@ class Frontier
                 new_frontier.append(point)
         self.frontier = new_frontier
 */
-    void remove_erased()
+    void _remove_erased()
     {
         vector<FrontierPoint<ParamsType>* > new_frontier;
         for(FrontierPoint<ParamsType>* point : frontier)
@@ -159,10 +158,14 @@ class Frontier
     }
 
 public:
+
+    bool changed = false;
+
     explicit Frontier(size_t _num_objectives): num_objectives(_num_objectives){}
 
     void sort()
     {
+        _remove_erased();
         std::sort(frontier.begin(), frontier.end(),
              [ ]( const FrontierPoint<ParamsType>* lhs, const FrontierPoint<ParamsType>* rhs )
                 {
@@ -172,7 +175,6 @@ public:
 
     void print(ostream& out, int print_top = -1, bool decorate = false)
     {
-        remove_erased();
         sort();
         reverse(frontier.begin(), frontier.end());
         int init_print = 0;
@@ -283,9 +285,10 @@ public:
 
             if(num_erased*2 >= frontier.size())
             {
-                remove_erased();
+                _remove_erased();
             }
 
+            changed = true;
             return new_point;
         }
         else
@@ -317,20 +320,18 @@ public:
  */
     const vector<FrontierPoint<ParamsType>* >& get_frontier()
     {
-        remove_erased();
         sort();
         return frontier;
     }
 
     vector<FrontierPoint<ParamsType>* >& get_frontier_to_modify() {
-        remove_erased();
         sort();
         return frontier;
     }
 
     pair<vector<double>, ParamsType>* get_best_better_than(vector<double> constraint, std::function<double(vector<double>)> optimization_function) {
 
-        remove_erased();
+        sort();
 
         assert(constraint.size() == num_objectives);
 
@@ -373,6 +374,20 @@ public:
         else {
             return nullptr;
         }
+    }
+
+    long double get_area()
+    {
+        assert(num_objectives == 2);
+        sort();
+        double ret = 0;
+        double left = 0;
+        for(size_t i = 0;i<frontier.size();i++)
+        {
+            ret += (frontier[i]->get_score_as_vector()[0] - left)*frontier[i]->get_score_as_vector()[1];
+            left = frontier[i]->get_score_as_vector()[0];
+        }
+        return ret;
     }
 
 

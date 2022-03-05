@@ -13,6 +13,7 @@
 #include <set>
 #include <map>
 #include <algorithm>
+#include "fstream"
 
 using namespace std;
 
@@ -149,12 +150,15 @@ public:
 
 public:
     string translate_back(const string& to_translate) const {
+        if(num_bits_per_char == -1) {
+            return to_translate;
+        }
         assert(num_bits_per_char == 6);
         string ret;
         string binary_num;
         for(auto id : to_translate) {
             assert(id != 0);
-            assert(id < id_to_char.size());
+            assert((int)id < (int)id_to_char.size());
             ret += id_to_char[id];
         }
         return ret;
@@ -246,6 +250,19 @@ class DatasetAndWorkload: public DatasetAndWorkloadMetaData
 
 
 public:
+
+    void print(ostream& out) const
+    {
+        out << "dataset" << endl;
+        for(const auto& it: dataset) {
+            out << it << endl;
+        }
+
+        out << "workload" << endl;
+        for(const auto& it: workload) {
+            out << it.first <<" "<< it.second << endl;
+        }
+    }
 
     DatasetAndWorkload(const string& file_path, const string& workload_difficulty, bool do_translate_to_base) {
 
@@ -381,7 +398,7 @@ public:
         return negative_workload;
     }
 
-    int get_max_length_of_dataset();
+    int get_max_length_of_dataset() const;
 
     const vector<pair<string, string> > &get_negative_workload_assert_has() const;
 };

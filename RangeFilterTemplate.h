@@ -140,10 +140,10 @@ public:
             string prefix;
             for(size_t j = 0;j<dataset[i].size();j++) {
                 prefix+=dataset[i][j];
-                pq->insert(prefix);
+                pq->insert(prefix, false);
             }
             prefix+=is_leaf_char;
-            pq->insert(prefix);
+            pq->insert(prefix, true);
         }
     }
 
@@ -154,6 +154,10 @@ public:
         assert(!left.empty() && !right.empty());
         assert(str_invariant(left));
         assert(str_invariant(right));
+
+        if(pq->get_has_range_query()) {
+            return pq->range_query(left, right);
+        }
 
         size_t max_n = max(max_length, max(left.size(), right.size()));
 
@@ -166,13 +170,6 @@ public:
             else {
                 left[at] -= 1;
             }
-//            while(left[at] == 0) {
-//                left[at] = max_char;
-//                assert(at >= 1);
-//                at--;
-//            }
-//            assert(left[at] >= 1);
-//            left[at] -= 1;
         }
 
         left = pad(left, max_n, max_char);
@@ -182,6 +179,8 @@ public:
         assert(left.size() == max_n);
 
         assert(left <= right);
+
+
         size_t n = left.size();
         size_t id = 0;
         string prefix;

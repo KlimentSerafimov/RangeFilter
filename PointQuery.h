@@ -17,10 +17,12 @@ public:
     virtual string to_string() const
     {
         assert(false);
+        return "";
     }
     virtual PointQueryParams* clone() const
     {
         assert(false);
+        return nullptr;
     }
 };
 
@@ -34,6 +36,7 @@ public:
     int num_queries;
     int num_false_positives;
     int num_negatives;
+    int num_false_negatives;
     unsigned long long total_num_bits;
 
     bool operator == (const RangeFilterStats& other) const
@@ -54,6 +57,7 @@ public:
             int _num_queries,
             int _num_false_positives,
             int _num_negatives,
+            int _num_false_negatives,
             unsigned long long _total_num_bits);
 
     string to_string() const;
@@ -87,15 +91,23 @@ public:
     unsigned long long int get_memory();
 
     int get_num_negatives();
+
+    int get_num_false_negatives();
 };
 
 #include <map>
 
 class PointQuery: virtual public PointQueryParams
 {
+protected:
+    bool has_range_query = false;
 public:
     PointQuery(): PointQueryParams() {}
 
+    bool get_has_range_query() const
+    {
+        return has_range_query;
+    }
 
 //    bool assert_contains = false;
 //    map<string, bool> memoized_contains;
@@ -119,6 +131,13 @@ public:
     virtual bool contains(const string& s)
     {
         assert(false);
+        return true;
+    }
+
+    virtual bool range_query(const string& left_str, const string& right_str)
+    {
+        assert(false);
+        return true;
     }
 
     virtual void insert(const string& s)
@@ -126,8 +145,13 @@ public:
         assert(false);
     }
 
+    virtual void insert(const string& s, bool is_leaf) {
+        insert(s);
+    }
+
     virtual unsigned long long get_memory() {
         assert(false);
+        return 0;
     }
 
     virtual void clear()
@@ -149,6 +173,12 @@ public:
     {
         assert(eval_stats_set);
         return eval_stats.get_num_false_positives();
+    }
+
+    int get_num_false_negatives()
+    {
+        assert(eval_stats_set);
+        return eval_stats.get_num_false_negatives();
     }
 
     int get_memory_from_score()

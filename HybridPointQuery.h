@@ -98,23 +98,42 @@ public:
         return ret;
     }
 
-    void insert(const string& s) override
+    void insert(const string& s, bool is_leaf) override
     {
+        string base_str = s;
+        if(is_leaf)
+        {
+            base_str = s.substr(0, s.size()-1);
+        }
         assert(invariant());
+
+        bool enter = false;
         for(size_t i = 0;i<splits.size();i++) {
-            if(splits[i] == s)
-            {
-                sub_point_query[i]->insert(s);
+            if(splits[i].substr(0, base_str.size()) == base_str) {
+                if(!enter) {
+                    sub_point_query[i]->insert(s, is_leaf);
+                }
                 assert(i+1 < sub_point_query.size());
-                sub_point_query[i+1]->insert(s);
-                return;
+                sub_point_query[i+1]->insert(s, is_leaf);
+                enter = true;
             }
+            else if(enter) {
+                assert(base_str > splits[i]);
+                break;
+            } else if(base_str > splits[i]) {
+                break;
+            }
+        }
+        if(enter) {
+            return;
+        }
+        for(size_t i = 0;i<splits.size();i++) {
             if(splits[i] > s) {
-                sub_point_query[i]->insert(s);
+                sub_point_query[i]->insert(s, is_leaf);
                 return;
             }
         }
-        sub_point_query[splits.size()]->insert(s);
+        sub_point_query[splits.size()]->insert(s, is_leaf);
     }
 
     unsigned long long get_memory() override {

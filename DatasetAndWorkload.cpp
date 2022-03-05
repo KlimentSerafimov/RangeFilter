@@ -28,7 +28,6 @@ DatasetAndWorkload::test_range_filter(RangeFilterTemplate *rf, bool do_print) co
             num_positive += 1;
             if (!prediction) {
                 num_false_negatives += 1;
-                assert(false);
             } else {
                 true_positives += 1;
             }
@@ -42,7 +41,6 @@ DatasetAndWorkload::test_range_filter(RangeFilterTemplate *rf, bool do_print) co
         }
     }
 
-    assert(num_false_negatives == 0);
 
     assert(true_negatives + true_positives + num_false_positives + num_false_negatives == (int) workload.size());
     if(do_print) {
@@ -57,6 +55,10 @@ DatasetAndWorkload::test_range_filter(RangeFilterTemplate *rf, bool do_print) co
         cout << "assert(true_negatives+true_positives+num_false_positives+num_false_negatives == workload.size()); passed" << endl;
     }
 
+    if(num_false_negatives >= 1) {
+        cout << "ERROR: NUM FALSE POSITIVES >= 1!!!" << endl;
+        num_false_positives = num_negative;
+    }
 
     RangeFilterStats ret(
             rf->get_point_query(),
@@ -64,6 +66,7 @@ DatasetAndWorkload::test_range_filter(RangeFilterTemplate *rf, bool do_print) co
             (int)workload.size(),
             num_false_positives,
             num_negative,
+            num_false_negatives,
             (int)rf->get_memory()*8);
 
     return ret;
@@ -244,7 +247,7 @@ RangeFilterStats DatasetAndWorkload::eval_point_query(PointQuery *pq) const {
     return rez;
 }
 
-int DatasetAndWorkload::get_max_length_of_dataset() {
+int DatasetAndWorkload::get_max_length_of_dataset() const{
     int ret = 0;
     for(size_t i = 0;i<dataset.size();i++) {
         ret = max(ret, (int)dataset[i].size());
