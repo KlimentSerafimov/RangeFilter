@@ -10,48 +10,42 @@
 #include "cassert"
 using namespace std;
 
-class PointQueryParams
-{
-public:
-    PointQueryParams() = default;
-    virtual string to_string() const
-    {
-        assert(false);
-        return "";
-    }
-    virtual PointQueryParams* clone() const
-    {
-        assert(false);
-        return nullptr;
-    }
-};
-
 class PointQuery;
 
-class RangeFilterStats
+class RangeFilterScore
 {
 public:
-    PointQuery* params;
-    int num_keys;
-    int num_queries;
-    int num_false_positives;
-    int num_negatives;
-    int num_false_negatives;
-    unsigned long long total_num_bits;
+    PointQuery* params = nullptr;
+    int num_keys = -1;
+    int num_queries = -1;
+    int num_false_positives = -1;
+    int num_negatives = -1;
+    int num_false_negatives = -1;
+    unsigned long long total_num_bits = 0;
 
-    bool operator == (const RangeFilterStats& other) const
-    {
-        return
-            num_keys == other.num_keys &&
-            num_queries == other.num_queries &&
-            num_false_positives == other.num_false_positives &&
-            num_negatives == other.num_negatives &&
-            total_num_bits == other.total_num_bits;
+    void clear(){
+        params = nullptr;
+        num_keys = -1;
+        num_queries = -1;
+        num_false_positives = -1;
+        num_negatives = -1;
+        num_false_negatives = -1;
+        total_num_bits = 0;
     }
 
-    RangeFilterStats() = default;
+    bool operator == (const RangeFilterScore& other) const
+    {
+        return
+                num_keys == other.num_keys &&
+                num_queries == other.num_queries &&
+                num_false_positives == other.num_false_positives &&
+                num_negatives == other.num_negatives &&
+                total_num_bits == other.total_num_bits;
+    }
 
-    RangeFilterStats(
+    RangeFilterScore() = default;
+
+    RangeFilterScore(
             PointQuery* _params,
             int _num_keys,
             int _num_queries,
@@ -86,13 +80,102 @@ public:
         return params;
     }
 
-    int get_num_false_positives();
+    int get_num_false_positives() const;
 
-    unsigned long long int get_memory();
+    unsigned long long int get_memory() const;
 
-    int get_num_negatives();
+    int get_num_negatives() const;
 
-    int get_num_false_negatives();
+    int get_num_false_negatives() const;
+};
+
+class PointQueryParams
+{
+protected:
+    explicit PointQueryParams(const PointQueryParams* to_clone): is_score_set(to_clone->is_score_set), score(to_clone->score) {}
+public:
+    PointQueryParams() = default;
+    virtual string to_string() const
+    {
+        assert(false);
+        return "";
+    }
+    virtual PointQueryParams* clone() const
+    {
+        assert(false);
+        return nullptr;
+    }
+
+private:
+    bool is_score_set = false;
+    RangeFilterScore score;
+    bool has_prev_score = false;
+    RangeFilterScore prev_score;
+public:
+    bool get_is_score_set() const
+    {
+        return is_score_set;
+    }
+
+    virtual void set_score(const RangeFilterScore& _eval_stats) {
+        if(is_score_set)
+        {
+            assert(score == _eval_stats);
+        }
+        else {
+            assert(!is_score_set);
+            is_score_set = true;
+            score = _eval_stats;
+        }
+    }
+
+    const RangeFilterScore& get_score() const
+    {
+        return score;
+    }
+
+    void reset_score()
+    {
+        assert(is_score_set);
+        prev_score = score;
+        has_prev_score = true;
+
+        is_score_set = false;
+        score.clear();
+    }
+
+    void undo_reset_score()
+    {
+        assert(is_score_set);
+        assert(has_prev_score);
+        score.clear();
+        score = prev_score;
+        prev_score.clear();
+        has_prev_score = false;
+    }
+
+    int get_num_false_positives()
+    {
+        assert(is_score_set);
+        return score.get_num_false_positives();
+    }
+
+    int get_num_false_negatives()
+    {
+        assert(is_score_set);
+        return score.get_num_false_negatives();
+    }
+
+    virtual unsigned long long get_memory_from_score()
+    {
+        assert(is_score_set);
+        return score.get_memory();
+    }
+
+    int get_num_negatives() {
+        assert(is_score_set);
+        return score.get_num_negatives();
+    }
 };
 
 #include <map>
@@ -159,39 +242,13 @@ public:
         assert(false);
     }
 
-private:
-    bool eval_stats_set = false;
-    RangeFilterStats eval_stats;
-public:
 
-    void set_score(RangeFilterStats _eval_stats) {
-        eval_stats_set = true;
-        eval_stats = _eval_stats;
+    unsigned long long get_memory_from_score() override {
+        unsigned long long ret = PointQueryParams::get_memory_from_score();
+        assert(get_memory()*8 == ret);
+        return ret;
     }
 
-    int get_num_false_positives()
-    {
-        assert(eval_stats_set);
-        return eval_stats.get_num_false_positives();
-    }
-
-    int get_num_false_negatives()
-    {
-        assert(eval_stats_set);
-        return eval_stats.get_num_false_negatives();
-    }
-
-    int get_memory_from_score()
-    {
-        assert(eval_stats_set);
-        assert(get_memory()*8 == eval_stats.get_memory());
-        return eval_stats.get_memory();
-    }
-
-    int get_num_negatives() {
-        assert(eval_stats_set);
-        return eval_stats.get_num_negatives();
-    }
 };
 
 

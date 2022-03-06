@@ -20,7 +20,7 @@ using namespace std;
 
 class RichMultiBloomParams;
 
-class MultiBloomParams: public PointQueryParams {
+class MultiBloomParams: virtual public PointQueryParams {
     void _init()
     {
         assert(cutoff >= 1);
@@ -34,7 +34,10 @@ public:
 
 //    MultiBloomParams() { assert(false); }
 
-    MultiBloomParams(const MultiBloomParams& to_clone): params(to_clone.params), cutoff(to_clone.cutoff) {_init();}
+    MultiBloomParams(const MultiBloomParams& to_clone): PointQueryParams(to_clone), params(to_clone.params), cutoff(to_clone.cutoff) {
+        _init();
+        assert(get_is_score_set());
+    }
 
     explicit MultiBloomParams(int _cutoff): cutoff(_cutoff) {_init();}
 
@@ -221,6 +224,11 @@ protected:
     }
 
 public:
+
+//    void set_score(const RangeFilterScore& score) override {
+//        PointQuery::set_score(score);
+//    }
+
     static vector<string> split(string str, const string& delim)
     {
         vector<string> ret;
@@ -285,17 +293,15 @@ public:
 
     MultiBloom(const vector<string>& dataset, double _seed_fpr, int _cutoff = -1, bool do_print = false):
     MultiBloomParams(_cutoff){
-        assert(cutoff != -1);
+        assert(cutoff >= 1);
 //        for(int i = 0;i<dataset.size();i++)
 //        {
 //            cout << dataset[i] << endl;
 //        }
         calc_metadata(dataset, do_print);
         size_t max_lvl = num_prefixes_per_level.size();
-        if(cutoff != -1)
-        {
-            max_lvl = min(max_lvl, (size_t)cutoff);
-        }
+        max_lvl = min(max_lvl, (size_t)cutoff);
+        cutoff = min(cutoff, (int)max_lvl);
         size_t min_num_elements = 4;
         for(size_t i = 0;i<max_lvl;i++){
             params.emplace_back(num_prefixes_per_level[i]+min_num_elements, _seed_fpr);
@@ -304,7 +310,9 @@ public:
         init();
     }
 
-    MultiBloom(const vector<string>& dataset, const MultiBloomParams& _params, bool do_print = false): MultiBloomParams(_params) {
+    MultiBloom(const vector<string>& dataset, const MultiBloomParams& _params, bool do_print = false):
+        PointQueryParams(_params),
+        MultiBloomParams(_params) {
         calc_metadata(dataset, do_print);
         init();
     }
@@ -379,7 +387,7 @@ public:
     }
 };
 
-class RichMultiBloom: public RichMultiBloomParams, public MultiBloom {
+class RichMultiBloom:  public RichMultiBloomParams, public MultiBloom {
     const vector<string>& dataset;
 
     bool has_prev = false;
@@ -464,6 +472,8 @@ public:
                 insert(super_str.substr(0, dim_id+1));
             }
         }
+
+        reset_score();
     }
 
     void undo() {
@@ -486,6 +496,8 @@ public:
                 insert(super_str.substr(0, dim_id+1));
             }
         }
+
+        undo_reset_score();
     }
 };
 

@@ -61,7 +61,7 @@ private:
 
             test_surf(dataset, workload, trie_size);
 
-            RangeFilterStats rez = dataset_and_workload.test_range_filter(surf_rf);
+            const RangeFilterScore& rez = *dataset_and_workload.test_range_filter(surf_rf);
 
             if(rez.get_num_false_negatives() == 0) {
                 ret->insert(PointQueryPointer(surf_pq), rez.get_score_as_vector());
@@ -93,7 +93,7 @@ private:
                 }
                 //            cout << "evaluating (sample " << samples_taken << ", _sample_id " << _sample_id << "): " << cutoff <<" " << fpr << endl;
                 OneBloom *pq = new OneBloom(dataset_and_workload.get_dataset(), fpr, cutoff);
-                RangeFilterStats rez = dataset_and_workload.eval_point_query(pq);
+                const RangeFilterScore& rez = *dataset_and_workload.eval_point_query(pq);
                 ret->insert(PointQueryPointer(pq), rez.get_score_as_vector());
             }
         }
@@ -109,9 +109,17 @@ private:
     }
 
     static Frontier<PointQueryPointer>* optimize_base_case(const DatasetAndWorkload& dataset_and_workload) {
-        return optimize_base_case_with_multi_bloom(dataset_and_workload);
-        return optimize_base_case_with_surf(dataset_and_workload);
-        return optimize_base_case_with_one_bloom(dataset_and_workload);
+        Frontier<PointQueryPointer>* ret = nullptr;
+        ret = optimize_base_case_with_multi_bloom(dataset_and_workload);
+
+        for(auto it: ret->get_frontier()){
+            assert(it->get_params().get_pq()->get_is_score_set());
+        }
+
+        return ret;
+
+//        return optimize_base_case_with_surf(dataset_and_workload);
+//        return optimize_base_case_with_one_bloom(dataset_and_workload);
     }
 
 public:
@@ -128,16 +136,17 @@ public:
         if(fresh_init) {
 
             for(int cutoff = 1; cutoff <= (int)dataset_and_workload.get_max_length(); cutoff++) {
-                for (double seed_fpr = 0.0001; seed_fpr <= 0.95; seed_fpr = min(seed_fpr + 0.05, seed_fpr * 2)) {
+                for (double seed_fpr = 0.0001; seed_fpr <= 0.95; seed_fpr = min(seed_fpr + 0.075, seed_fpr * 2)) {
                     bool do_print = false;
                     RichMultiBloom *pq = new RichMultiBloom(dataset_and_workload, seed_fpr,
                                                             cutoff, do_print);
                     auto *rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
-                    RangeFilterStats ret = dataset_and_workload.test_range_filter(rf, do_print);
+                    const RangeFilterScore& ret = *dataset_and_workload.test_range_filter(rf, do_print);
 
-                    RichMultiBloom &tmp_rmb_pq = *(RichMultiBloom *) ret.get_params();
-                    RichMultiBloomParams &tmp_params = *(tmp_rmb_pq.add_iter_and_epoch(1, 0));
-                    frontier->insert(tmp_params, ret.get_score_as_vector());
+                    RichMultiBloom* tmp_rmb_pq = (RichMultiBloom *) ret.get_params();
+                    RichMultiBloomParams* tmp_params = (tmp_rmb_pq->add_iter_and_epoch(1, 0));
+                    tmp_params->set_score(ret);
+                    frontier->insert(*tmp_params, ret.get_score_as_vector());
 
                     cout << ret.to_string() << endl;
                 }
@@ -161,9 +170,10 @@ public:
                 bool do_print = false;
                 RichMultiBloom *pq = new RichMultiBloom(dataset_and_workload, line, do_print);
                 auto *rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
-                RangeFilterStats ret = dataset_and_workload.test_range_filter(rf, do_print);
+                const RangeFilterScore& ret = *dataset_and_workload.test_range_filter(rf, do_print);
                 RichMultiBloom &tmp_rmb_pq = *(RichMultiBloom *) ret.get_params();
                 RichMultiBloomParams &tmp_params = *(tmp_rmb_pq.add_iter_and_epoch(1, 0));
+                assert(false); // NEED TO UPDATE SCORE IN tmp_params TO ret.
                 auto new_point = frontier->insert(tmp_params, ret.get_score_as_vector());
                 cout << "RESULT" << endl;
 
@@ -203,8 +213,11 @@ public:
         const auto& dataset = dataset_and_workload.get_dataset();
         for(auto it: frontier->get_frontier())
         {
-            assert(ret_frontier->insert(PointQueryPointer(new MultiBloom(dataset, it->get_params())), it->get_score_as_vector()));
+            MultiBloom* new_multi_bloom = new MultiBloom(dataset, it->get_params());
+            new_multi_bloom->set_score(it->get_params().get_score());
+            assert(ret_frontier->insert(PointQueryPointer(new_multi_bloom), it->get_score_as_vector()));
         }
+
 
         return ret_frontier;
     }
@@ -224,7 +237,7 @@ public:
 
         Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload);
 
-        if(dataset_and_workload.get_dataset().size() == 1)
+        if(dataset_and_workload.get_dataset().size() < 100)
         {
             return base_case_frontier;
         }
@@ -339,7 +352,7 @@ public:
 //            right_pq->get_params().get_pq()->assert_contains = true;
 
                 HybridPointQuery* pq = new HybridPointQuery(best_split, dataset_and_workload.original_meta_data, left_pq->get_params().get_pq(), right_pq->get_params().get_pq());
-//            RangeFilterStats rez1 = dataset_and_workload.eval_point_query(pq);
+//            RangeFilterScore rez1 = dataset_and_workload.eval_point_query(pq);
 
                 int num_negatives =
                         left_pq->get_params().get_pq()->get_num_negatives() +
@@ -349,7 +362,7 @@ public:
                 assert(left_pq->get_params().get_pq()->get_num_false_negatives() +
                        right_pq->get_params().get_pq()->get_num_false_negatives() == 0);
 
-                RangeFilterStats rez2(
+                RangeFilterScore rez2(
                         pq,
                         (int)dataset_and_workload.get_dataset().size(),
                         (int)dataset_and_workload.get_workload().size(),
@@ -365,6 +378,8 @@ public:
 //                assert(rez1.get_num_false_positives() - 1 == rez2.get_num_false_positives());
 //            }
 
+                pq->set_score(rez2);
+
                 ret->insert(PointQueryPointer(pq), rez2.get_score_as_vector());
             }
         }
@@ -372,6 +387,11 @@ public:
         ret->print(cout, 10, true);
 
         cout << "DONE WITH RECURSIVE STEP" << endl;
+
+
+        for(auto it: ret->get_frontier()){
+            assert(it->get_params().get_pq()->get_is_score_set());
+        }
 
         return ret;
     }

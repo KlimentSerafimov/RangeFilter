@@ -11,7 +11,7 @@
 
 using namespace std;
 
-class HybridPointQueryParams: public PointQueryParams
+class HybridPointQueryParams: virtual public PointQueryParams
 {
 protected:
     size_t n = 0;
@@ -45,7 +45,8 @@ class HybridPointQuery: public HybridPointQueryParams, public PointQuery {
 public:
     HybridPointQuery(const DatasetAndWorkload& dataset_and_workload, const string& midpoint, int left_cutoff, float left_fpr, int right_cutoff, float right_fpr, bool do_print);
 
-    HybridPointQuery(const string& midpoint, const DatasetAndWorkloadMetaData& meta_data, PointQuery* left_pq, PointQuery* right_pq, bool do_print = false):
+    HybridPointQuery(
+            const string& midpoint, const DatasetAndWorkloadMetaData& meta_data, PointQuery* left_pq, PointQuery* right_pq, bool do_print = false):
             HybridPointQueryParams(meta_data)
     {
         n = 2;
@@ -58,6 +59,12 @@ public:
 
         assert(invariant());
     }
+
+    void set_score(const RangeFilterScore& _eval_stats) override {
+        HybridPointQueryParams::set_score(_eval_stats);
+        PointQuery::set_score(_eval_stats);
+    }
+
 
     HybridPointQueryParams* clone() const override{
         return HybridPointQueryParams::clone();

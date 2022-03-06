@@ -370,9 +370,9 @@ public:
 
 
 
-    RangeFilterStats test_range_filter(RangeFilterTemplate* rf, bool do_print = false) const;
+    const RangeFilterScore * test_range_filter(RangeFilterTemplate* rf, bool do_print = false) const;
 
-    RangeFilterStats eval_point_query(PointQuery* pq) const;
+    const RangeFilterScore * eval_point_query(PointQuery* pq) const;
 
     void prep_dataset_and_workload(const string& file_path, const string& workload_difficulty, int impossible_depth = -1);
 

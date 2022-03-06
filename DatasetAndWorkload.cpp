@@ -6,7 +6,7 @@
 #include "DatasetAndWorkload.h"
 #include "RangeFilterTemplate.h"
 
-RangeFilterStats
+const RangeFilterScore *
 DatasetAndWorkload::test_range_filter(RangeFilterTemplate *rf, bool do_print) const
 {
     int num_positive = 0;
@@ -60,7 +60,7 @@ DatasetAndWorkload::test_range_filter(RangeFilterTemplate *rf, bool do_print) co
         num_false_positives = num_negative;
     }
 
-    RangeFilterStats ret(
+    const RangeFilterScore* ret = new RangeFilterScore(
             rf->get_point_query(),
             (int)dataset.size(),
             (int)workload.size(),
@@ -241,10 +241,9 @@ void DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, cons
     }
 }
 
-RangeFilterStats DatasetAndWorkload::eval_point_query(PointQuery *pq) const {
+const RangeFilterScore * DatasetAndWorkload::eval_point_query(PointQuery *pq) const {
     RangeFilterTemplate* rf = new RangeFilterTemplate(*this, pq);
-    RangeFilterStats rez = test_range_filter(rf);
-    return rez;
+    return test_range_filter(rf);
 }
 
 int DatasetAndWorkload::get_max_length_of_dataset() const{

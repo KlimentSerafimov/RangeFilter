@@ -13,14 +13,15 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
     double seed_fpr = 0.0001;
 
     int seed_cutoff = dataset_and_workload.get_max_length_of_dataset();
-    bool do_print = true;
+    bool do_print = false;
 
 
     vector<string> dim_names;
     dim_names.emplace_back("bpk");
     dim_names.emplace_back("fpr");
 
-    int output_frontier_every = 1000;
+    int output_step_count_every = 1000;
+    int output_frontier_every = 2000;
     int hard_copy_every = 2500;
 
     deque<double> past_area;
@@ -33,13 +34,15 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
     RichMultiBloom *_pq = new RichMultiBloom(dataset_and_workload, seed_fpr, seed_cutoff, do_print);
     RangeFilterTemplate *_rf = new RangeFilterTemplate(dataset_and_workload, _pq, do_print);
 
-    RangeFilterStats _ret = dataset_and_workload.test_range_filter(_rf, do_print);
+    const RangeFilterScore& _ret = *dataset_and_workload.test_range_filter(_rf, do_print);
 
     size_t annealing_epoch = 0;
     size_t iter = 1;
+    size_t total_num_inserts = 0;
     RichMultiBloom& tmp_rmb_pq = *(RichMultiBloom*)_ret.get_params();
     RichMultiBloomParams& tmp_params = *(tmp_rmb_pq.add_iter_and_epoch(iter, annealing_epoch));
-    frontier.insert(tmp_params, _ret.get_score_as_vector());
+    total_num_inserts += frontier.insert(tmp_params, _ret.get_score_as_vector()) != nullptr;
+
 
     cout << endl;
     cout << _ret.to_string() << endl;
@@ -56,6 +59,7 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
         assert(frontier.get_size() >= 1);
 
         pq = new RichMultiBloom(dataset_and_workload, (*frontier.get_frontier().begin())->get_params(), do_print);
+        assert(pq->get_is_score_set());
         rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
 
     }
@@ -68,8 +72,6 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
     past_area.push_back(frontier.get_area());
 
     annealing_epoch+=1;
-
-    size_t total_num_inserts = 1;
 
     size_t success_count = 0;
     size_t explore_more_success_count_threshold = 3;
@@ -91,16 +93,19 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
             mult = pow(2.0, 1.0/(double)annealing_epoch);
         }
 
-        pq->perturb(dim_id, mult, rf->get_is_leaf_char());
+        pq->perturb(dim_id, mult, rf->get_is_leaf_char()); // save score, and if no improvement reset it back at undo, otherwise update it.
 
-        RangeFilterStats ret = dataset_and_workload.test_range_filter(rf, do_print);
+        const RangeFilterScore& ret = *dataset_and_workload.test_range_filter(rf, do_print);
 
-        cout << endl;
-        cout << "ITER " << iter << endl;
-        cout << "EPOCH " << annealing_epoch << endl;
+        if(iter % output_step_count_every == 0) {
+            cout << endl;
+            cout << "ITER " << iter << endl;
+            cout << "EPOCH " << annealing_epoch << endl;
+        }
 
         RichMultiBloom& local_tmp_rmb_pq = *(RichMultiBloom*)ret.get_params();
         RichMultiBloomParams& local_tmp_params = *local_tmp_rmb_pq.add_iter_and_epoch(iter, annealing_epoch);
+        local_tmp_params.set_score(ret);
         if(frontier.insert(local_tmp_params, ret.get_score_as_vector()))
         {
             double frontier_area = frontier.get_area();
@@ -110,40 +115,50 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
             total_num_inserts+=1;
             stagnation_count = 0;
 
-            cout << "INSERT & CONTINUE" << endl;
-            cout <<"|frontier.area|" << frontier_area << endl;
             frontiers << "iter\t" << iter <<"\t|frontier.area|" << frontier_area << endl;
 
-            cout << "|frontier| = " << frontier.get_size() << endl;
-            cout << "|inserts| = " << total_num_inserts << endl;
-            cout << "|betterment| = " << success_count << endl;
+            if(iter % output_step_count_every == 0) {
+                cout << "INSERT & CONTINUE" << endl;
+                cout << "|frontier.area|" << frontier_area << endl;
+
+                cout << "|frontier| = " << frontier.get_size() << endl;
+                cout << "|inserts| = " << total_num_inserts << endl;
+                cout << "|betterment| = " << success_count << endl;
+            }
 
         }
         else
         {
             stagnation_count+=1;
             success_count = 0;
-            cout << "UNDO" << endl << "|stagnation| " << stagnation_count << endl;
+            if(iter % output_step_count_every == 0) {
+                cout << "UNDO" << endl << "|stagnation| " << stagnation_count << endl;
+                double frontier_area = frontier.get_area();
+                cout << "|frontier.area|" << frontier_area << endl;
+                cout << "|frontier| = " << frontier.get_size() << endl;
+                cout << "|inserts| = " << total_num_inserts << endl;
+            }
             pq->undo();
         }
 
-        cout << ret.to_string() << endl;
+        if(iter % output_step_count_every == 0) {
+            cout << ret.to_string() << endl;
+        }
 
         if(success_count >= explore_more_success_count_threshold && annealing_epoch >= 2)
         {
-            cout << endl;
-            cout << "EXPLORE MORE" << endl;
+//            cout << endl;
+//            cout << "EXPLORE MORE" << endl;
             assert(annealing_epoch >= 2);
             annealing_epoch = annealing_epoch-1;
-//            annealing_epoch = max((size_t)1, annealing_epoch/2);
-            cout << "NEW EPOCH " << annealing_epoch << endl;
+//            cout << "NEW EPOCH " << annealing_epoch << endl;
             success_count = 0;
         }
 
         bool break_asap = false;
         if(stagnation_count >= stagnation_count_cutoff_for_annealing_epoch_transition)
         {
-            cout << endl;
+//            cout << endl;
 
             vector<FrontierPoint<RichMultiBloomParams>* >& vec = frontier.get_frontier_to_modify();
             pair<size_t, int> oldest_params = make_pair(iter, -1);
@@ -151,11 +166,11 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
             for(size_t reinitialization_count = 0;
                 reinitialization_count <= max_reinitialization_count && oldest_params.second == -1;
                 reinitialization_count++) {
-                if(reinitialization_count >= 1)
-                {
-                    cout << "REINITIALIZATION_COUNT " << reinitialization_count << endl;
-                    cout << "MAX_REINITIALIZATION_COUNT " << max_reinitialization_count << endl;
-                }
+//                if(reinitialization_count >= 1)
+//                {
+//                    cout << "REINITIALIZATION_COUNT " << reinitialization_count << endl;
+//                    cout << "MAX_REINITIALIZATION_COUNT " << max_reinitialization_count << endl;
+//                }
                 for (size_t i = 0; i < vec.size(); i++) {
                     if (vec[i]->get_params().get_used_for_reinit_count() <= reinitialization_count) {
                         oldest_params = min(oldest_params, make_pair(vec[i]->get_params().get_iter_id(), (int) i));
@@ -172,9 +187,8 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
 
                 assert(oldest_params.second != -1);
 
-                cout << "REINITIALIZE TO" << endl;
-
-                cout << vec[oldest_params.second]->to_string(dim_names) << endl;
+//                cout << "REINITIALIZE TO" << endl;
+//                cout << vec[oldest_params.second]->to_string(dim_names) << endl;
 
                 pq->reinitialize(vec[oldest_params.second]->get_params());
                 rf->insert_prefixes(dataset);
@@ -184,7 +198,7 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
 
                 annealing_epoch = params.get_epoch();
 
-                cout << "NEW EPOCH " << annealing_epoch << endl;
+//                cout << "NEW EPOCH " << annealing_epoch << endl;
 
                 stagnation_count = 0;
                 success_count = 0;
@@ -238,6 +252,7 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
         if(break_asap)
         {
             cout << endl;
+            cout << "ITER " << iter << endl;
             cout << "BREAK" << endl;
             frontiers << "BREAK" << endl;
             break;

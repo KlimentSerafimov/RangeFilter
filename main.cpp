@@ -178,7 +178,7 @@ int main_test_surf(DatasetAndWorkload& dataset_and_workload)
 
         SurfPointQuery* surf_pq = new SurfPointQuery(dataset_and_workload.get_dataset(), trie_size);
         RangeFilterTemplate* surf_rf = new RangeFilterTemplate(dataset_and_workload, surf_pq);
-        RangeFilterStats rez = dataset_and_workload.test_range_filter(surf_rf);
+        const RangeFilterScore& rez = *dataset_and_workload.test_range_filter(surf_rf);
         cout << surf_ret.to_string() << endl;
         cout << rez.to_string() << endl;
         assert(rez.get_num_false_positives() == surf_ret.get_num_false_positives());
@@ -265,7 +265,7 @@ int main() {
 //    return 0;
 
     string file_folder;
-    string file_name = "1k_dataset.txt";
+    string file_name = "50k_dataset.txt";
     string workload_difficulty = "hard"; //choose from "easy", "medium", "hard", "impossible", hybrid
     string range_filter_type = "hybrid"; // choose from "heatmap", "trie", "surf", "one_bloom", "multi_bloom", "hybrid"
     string parameter_search_style = "dt_style"; // choose from "no_search", "grid_search", "simulated_annealing", "dt_style"
@@ -350,7 +350,7 @@ int main() {
             Frontier<HybridRangeFilterSynthesizer::PointQueryPointer> *ret =
                     HybridRangeFilterSynthesizer::construct_hybrid_point_query(local_dataset_and_workload, ground_truth, vector<string>(1, "root"));
 
-            ofstream dt_out("tree_of_hybrid_hard1k_cutoff1.3__only_multi_bloom.out");
+            ofstream dt_out("tree_of_hybrid_hard50k_cutoff1.3__only_multi_bloom.out");
 
             ret->print(dt_out);
 
@@ -429,7 +429,7 @@ void grid_search(DatasetAndWorkload& dataset_and_workload, const string& _range_
                         PointQuery *pq;
                         pq = new HybridPointQuery(dataset_and_workload, "kirk", left_cutoff, left_fpr, right_cutoff, right_fpr, do_print);
                         auto *rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
-                        RangeFilterStats ret = dataset_and_workload.test_range_filter(rf, do_print);
+                        const RangeFilterScore& ret = *dataset_and_workload.test_range_filter(rf, do_print);
 //                        HybridPointQueryParams *params = (HybridPointQueryParams *) ret.get_params();
                         HybridPointQuery& local_tmp_rmb_pq = *((HybridPointQuery*)ret.get_params());
                         frontier.insert(local_tmp_rmb_pq, ret.get_score_as_vector());
@@ -440,14 +440,14 @@ void grid_search(DatasetAndWorkload& dataset_and_workload, const string& _range_
                         {
                             PointQuery *mb_pq = new MultiBloom(dataset, right_fpr, right_cutoff, do_print);
                             auto *multi_bloom_rf = new RangeFilterTemplate(dataset_and_workload, mb_pq, do_print);
-                            RangeFilterStats mb_ret = dataset_and_workload.test_range_filter(multi_bloom_rf, do_print);
+                            const RangeFilterScore& mb_ret = *dataset_and_workload.test_range_filter(multi_bloom_rf, do_print);
                             MultiBloomParams *mb_params = (MultiBloomParams *) mb_ret.get_params();
                             multi_bloom_frontier.insert(*mb_params, mb_ret.get_score_as_vector());
                         }
                         {
                             PointQuery *mb_pq = new MultiBloom(dataset, left_fpr, left_cutoff, do_print);
                             auto *multi_bloom_rf = new RangeFilterTemplate(dataset_and_workload, mb_pq, do_print);
-                            RangeFilterStats mb_ret = dataset_and_workload.test_range_filter(multi_bloom_rf, do_print);
+                            const RangeFilterScore& mb_ret = *dataset_and_workload.test_range_filter(multi_bloom_rf, do_print);
                             MultiBloomParams *mb_params = (MultiBloomParams *) mb_ret.get_params();
                             multi_bloom_frontier.insert(*mb_params, mb_ret.get_score_as_vector());
                         }
@@ -498,7 +498,7 @@ void grid_search(DatasetAndWorkload& dataset_and_workload, const string& _range_
                     assert(false);
                 }
                 auto *rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
-                RangeFilterStats ret = dataset_and_workload.test_range_filter(rf, do_print);
+                const RangeFilterScore& ret = *dataset_and_workload.test_range_filter(rf, do_print);
 
                 if(range_filter_type == "multi_bloom") {
                     MultiBloomParams *params = (MultiBloomParams *)ret.get_params();
