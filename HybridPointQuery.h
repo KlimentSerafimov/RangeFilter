@@ -20,11 +20,17 @@ protected:
     const DatasetAndWorkloadMetaData& meta_data;
 
     bool invariant() const {
-        assert(n >= 1);
-        assert(splits.size() == n-1);
-        assert(sub_point_query_params.size() == n);
-        for(size_t i = 1;i<splits.size();i++) {
-            assert(splits[i] >= splits[i-1]);
+        if(n == 0) {
+            assert(splits.size() == 0);
+            assert(sub_point_query_params.size() == 0);
+        }
+        else {
+            assert(n >= 1);
+            assert(splits.size() == n - 1);
+            assert(sub_point_query_params.size() == n);
+            for (size_t i = 1; i < splits.size(); i++) {
+                assert(splits[i] >= splits[i - 1]);
+            }
         }
         return true;
     }
@@ -56,30 +62,28 @@ public:
     HybridPointQuery(const DatasetAndWorkload& dataset_and_workload, const string& midpoint, int left_cutoff, float left_fpr, int right_cutoff, float right_fpr, bool do_print);
 
     HybridPointQuery(
-            const string& midpoint, const DatasetAndWorkloadMetaData& meta_data, PointQuery* left_pq, PointQuery* right_pq, bool do_print = false):
+            const string& midpoint, const DatasetAndWorkloadMetaData& meta_data,
+            PointQuery* left_pq, PointQuery* right_pq):
             HybridPointQueryParams(meta_data)
     {
-        n = 2;
-        splits.push_back(midpoint);
+        n = 0;
+        set_split(midpoint, left_pq, right_pq);
+    }
 
-        sub_point_query.push_back(left_pq);
-        sub_point_query_params.push_back(*sub_point_query.rbegin());
-        sub_point_query.push_back(right_pq);
-        sub_point_query_params.push_back(*sub_point_query.rbegin());
-
+    HybridPointQuery(const DatasetAndWorkloadMetaData& meta_data): HybridPointQueryParams(meta_data) {
+        n = 0;
         assert(invariant());
     }
 
     HybridPointQuery* clone() override
     {
         assert(n == 2);
+        assert(invariant());
         return new HybridPointQuery(
                 splits[0],
                 meta_data,
                 sub_point_query[0]->clone(),
-                sub_point_query[1]->clone(),
-                false
-                );
+                sub_point_query[1]->clone());
     }
 
 
@@ -195,6 +199,8 @@ public:
     {
         return HybridPointQueryParams::to_string();
     }
+
+    void set_split(const string& midpoint, PointQuery *left_pq, PointQuery *right_pq);
 };
 
 

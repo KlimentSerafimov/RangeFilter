@@ -86,7 +86,7 @@ class RichMultiBloomParams: virtual public MultiBloomParams
 {
 
 private:
-    mutable size_t iter_id = 0;
+    mutable int iter_id = 0;
     mutable size_t epoch_id = 0;
     mutable size_t used_for_reinit_count = 0;
 public:
@@ -122,7 +122,7 @@ public:
         return this;
     }
 
-    const size_t &get_iter_id() const {
+    const int get_iter_id() const {
         return iter_id;
     }
 
@@ -147,16 +147,17 @@ public:
 class MultiBloom: public PointQuery, virtual public MultiBloomParams
 {
 
-    int max_length{};
-    vector<set<string> > unique_prefixes_per_level;
     vector<int> num_prefixes_per_level;
 
 protected:
     vector<bloom_filter> bfs;
 private:
 
-    void calc_metadata(bool do_print)
+    void calc_metadata(const vector<string>& dataset, bool do_print)
     {
+        int max_length = -1;
+        vector<set<string> > unique_prefixes_per_level;
+
         const int calc_unique_prefixes_lvl = 9;
 
         for(size_t i = 0;i<dataset.size();i++)
@@ -206,8 +207,6 @@ private:
         }
     }
 
-
-
 protected:
     static size_t lvl(const string& s)
     {
@@ -216,13 +215,11 @@ protected:
 
     void init()
     {
+        assert(cutoff != -1);
         vector<bloom_filter> parameters = vector<bloom_filter>();
         bfs = vector<bloom_filter>();
         size_t max_lvl = params.size();
-        if(cutoff != -1)
-        {
-            assert(max_lvl <= (size_t)cutoff);
-        }
+        assert(max_lvl == (size_t)cutoff);
         assert(bfs.empty());
         for(size_t i = 0;i<max_lvl;i++)
         {
@@ -230,8 +227,6 @@ protected:
             bfs.emplace_back(bloom_filter(parameters[i]));
         }
     }
-
-    const vector<string>& dataset;
 
 public:
 
@@ -305,10 +300,13 @@ public:
 
     MultiBloom() = default;
 
-    MultiBloom(const vector<string>& _dataset, double _seed_fpr, int _cutoff = -1, bool do_print = false):
-    MultiBloomParams(_cutoff), dataset(_dataset){
+
+
+    MultiBloom(const vector<string>& dataset, double _seed_fpr, int _cutoff = -1, bool do_print = false):
+    MultiBloomParams(_cutoff) {
         assert(cutoff >= 1);
-        calc_metadata(do_print);
+
+        calc_metadata(dataset, do_print);
         size_t max_lvl = num_prefixes_per_level.size();
         max_lvl = min(max_lvl, (size_t)cutoff);
         cutoff = min(cutoff, (int)max_lvl);
@@ -320,24 +318,33 @@ public:
         init();
     }
 
-    MultiBloom* clone() override {
-        return new MultiBloom(dataset, *this, false);
+    MultiBloom(MultiBloom* to_copy):
+        PointQueryParams(*to_copy),
+        MultiBloomParams(*to_copy)
+    {
+        for(auto it: to_copy->bfs) {
+            bfs.push_back(it);
+        }
     }
 
-    MultiBloom(const vector<string>& _dataset, const MultiBloomParams& _params, bool do_print = false):
+    MultiBloom* clone() override {
+        return new MultiBloom(this);
+    }
+
+    MultiBloom(const vector<string>& dataset, const MultiBloomParams& _params, bool do_print = false):
         PointQueryParams(_params),
-        MultiBloomParams(_params),
-        dataset(_dataset) {
-        calc_metadata(do_print);
+        MultiBloomParams(_params){
+        calc_metadata(dataset, do_print);
 
         size_t max_lvl = num_prefixes_per_level.size();
         max_lvl = min(max_lvl, (size_t)cutoff);
         cutoff = min(cutoff, (int)max_lvl);
         size_t min_num_elements = 4;
+        assert((int)max_lvl == cutoff);
+        assert(cutoff == (int)params.size());
         for(size_t i = 0;i<max_lvl;i++){
             assert(i < params.size());
             params[i].first = num_prefixes_per_level[i]+min_num_elements;
-//            params.emplace_back(num_prefixes_per_level[i]+min_num_elements, _seed_fpr);
         }
 
         init();
@@ -345,11 +352,8 @@ public:
 
 
 
-    MultiBloom(const vector<string>& _dataset, const string& line, bool do_print = false):
-    MultiBloomParams(init_from_string(line)),
-    dataset(_dataset) {
-        calc_metadata(do_print);
-
+    MultiBloom(const string &line) :
+    MultiBloomParams(init_from_string(line)) {
         init();
     }
 

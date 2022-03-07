@@ -64,9 +64,7 @@ class RangeFilterTemplate
     void calc_metadata(const DatasetAndWorkload& dataset_and_workload, bool do_print);
 
 public:
-    ~RangeFilterTemplate(){
-        pq->clear();
-    }
+    ~RangeFilterTemplate(){ }
 private:
     bool track_negative_point_queries = false;
     map<string, int> prefix_to_negative_point_queries;

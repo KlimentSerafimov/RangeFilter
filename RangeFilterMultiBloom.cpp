@@ -27,7 +27,7 @@ RichMultiBloom::RichMultiBloom(const DatasetAndWorkload &dataset_and_workload, c
 RichMultiBloom::RichMultiBloom(const DatasetAndWorkload &dataset_and_workload, const string &line, bool do_print):
         MultiBloomParams(init_from_string(line)),
         RichMultiBloomParams(MultiBloomParams(init_from_string(line))),
-        MultiBloom(dataset_and_workload.get_dataset(), line, do_print),
+        MultiBloom(line),
         dataset(dataset_and_workload.get_dataset()){
     assert((int)RichMultiBloomParams::params.size() == RichMultiBloomParams::cutoff);
 

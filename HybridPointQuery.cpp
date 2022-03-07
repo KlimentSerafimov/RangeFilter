@@ -87,3 +87,17 @@ HybridPointQuery::HybridPointQuery(const DatasetAndWorkload &dataset_and_workloa
     }
     assert(invariant());
 }
+
+void HybridPointQuery::set_split(const string& midpoint, PointQuery *left_pq, PointQuery *right_pq) {
+    assert(n == 0);
+    assert(invariant());
+    n = 2;
+
+    splits.push_back(midpoint);
+
+    sub_point_query.push_back(left_pq);
+    sub_point_query_params.push_back(*sub_point_query.rbegin());
+    sub_point_query.push_back(right_pq);
+    sub_point_query_params.push_back(*sub_point_query.rbegin());
+    assert(invariant());
+}

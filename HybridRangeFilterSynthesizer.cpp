@@ -3,12 +3,14 @@
 //
 
 #include "HybridRangeFilterSynthesizer.h"
+#include <iomanip>
 
 
 Frontier<RichMultiBloomParams> *
 simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &frontiers, int meta_iter,
                     Frontier<RichMultiBloomParams> *frontier_p)
 {
+    assert(meta_iter >= 1);
     const vector<string>& dataset = dataset_and_workload.get_dataset();
     double seed_fpr = 0.0001;
 
@@ -20,9 +22,10 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
     dim_names.emplace_back("bpk");
     dim_names.emplace_back("fpr");
 
-    int output_step_count_every = 1000;
-    int output_frontier_every = 2000;
-    int hard_copy_every = 2500;
+    int measure_frontier_area_every_step = meta_iter*1200;
+    int output_step_count_every = 600;
+    int output_frontier_every = 1200;
+    int hard_copy_every = 2400;
 
 
     if(frontier_p == nullptr) {
@@ -43,15 +46,23 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
     total_num_inserts += frontier.insert(tmp_params, _ret.get_score_as_vector()) != nullptr;
 
 
-    cout << endl;
-    cout << _ret.to_string() << endl;
+//    cout << endl;
+//    cout << _ret.to_string() << endl;
 
     RichMultiBloom *pq = nullptr;
     RangeFilterTemplate *rf = nullptr;
 
+    int iter_id_offset = 1;
+
     if(true) {
+
         for (const auto &it: frontier.get_frontier()) {
-            ((RichMultiBloomParams *) &it->get_params())->add_iter_and_epoch(1, 0);
+            iter_id_offset = max(iter_id_offset, (int)((RichMultiBloomParams *) &it->get_params())->get_iter_id()+1);
+        }
+
+        for (const auto &it: frontier.get_frontier()) {
+            ((RichMultiBloomParams *) &it->get_params())->add_iter_and_epoch(
+                    ((RichMultiBloomParams *) &it->get_params())->get_iter_id()-iter_id_offset, 0);
             ((RichMultiBloomParams *) &it->get_params())->reset_reinint_count();
         }
 
@@ -69,7 +80,7 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
     }
 
     double prev_area = frontier.get_area();
-    double prev_line_length = frontier.get_line_length();
+    LineLength prev_line_length = frontier.get_line_length();
 
     annealing_epoch+=1;
 
@@ -113,7 +124,8 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
         if(frontier.insert(local_tmp_params, ret.get_score_as_vector()))
         {
             pq = pq->clone(dataset_and_workload);
-            rf->set_point_query(pq);
+            delete rf;
+            rf = new RangeFilterTemplate(dataset_and_workload, pq, false);
             double frontier_area = frontier.get_area();
 
             success_count+=1;
@@ -125,7 +137,8 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
             if(iter % output_step_count_every == 0) {
                 cout << "INSERT & CONTINUE" << endl;
                 cout << "|frontier.area|" << frontier_area << endl;
-                cout << "|frontier.line_len|" << frontier.get_line_length() << endl;
+                LineLength frontier_line_length = frontier.get_line_length();
+                cout << "|frontier.square_area|: " << frontier_line_length.first << " " << frontier_line_length.second << endl;
 
                 cout << "|frontier| = " << frontier.get_size() << endl;
                 cout << "|inserts| = " << total_num_inserts << endl;
@@ -141,7 +154,8 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
                 cout << "UNDO" << endl << "|stagnation| " << stagnation_count << endl;
                 double frontier_area = frontier.get_area();
                 cout << "|frontier.area|" << frontier_area << endl;
-                cout << "|frontier.line_len|" << frontier.get_line_length() << endl;
+                LineLength frontier_line_length = frontier.get_line_length();
+                cout << "|frontier.line_len|" << frontier_line_length.first << " "<< frontier_line_length.second<< endl;
 
                 cout << "|frontier| = " << frontier.get_size() << endl;
                 cout << "|inserts| = " << total_num_inserts << endl;
@@ -169,7 +183,7 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
 //            cout << endl;
 
             vector<FrontierPoint<RichMultiBloomParams>* >& vec = frontier.get_frontier_to_modify();
-            pair<size_t, int> oldest_params = make_pair(iter, -1);
+            pair<int, int> oldest_params = make_pair((int)iter, -1);
 
             for(size_t reinitialization_count = 0;
                 reinitialization_count <= max_reinitialization_count && oldest_params.second == -1;
@@ -257,9 +271,15 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
 
         }
 
-        if(iter % output_step_count_every == 0){
+        if(iter % measure_frontier_area_every_step == 0){
             double frontier_area = frontier.get_area();
-            double frontier_line_length = frontier.get_line_length();
+            LineLength frontier_line_length = frontier.get_line_length();
+
+            cout << "MEASURING @ ITER " << iter << endl;
+            cout << "prev_area " << prev_area << endl;
+            cout << "prev_line_length " << prev_line_length.to_string() << endl;
+            cout << "frontier_area " << frontier_area << endl;
+            cout << "frontier_line_length " << frontier_line_length.to_string() << endl;
 
             if (prev_line_length == frontier_line_length) {
                 cout << "line_len NOT IMPROVED" << endl;
@@ -295,8 +315,8 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
         }
     }
 
-    cout << "DONE" << endl;
-    frontiers << "DONE" << endl;
+    cout << "DONE" << endl << endl << endl;
+    frontiers << "DONE" << endl << endl << endl;
 
     return frontier_p;
 }

@@ -146,7 +146,7 @@ public:
             if (fresh_init) {
 
                 for (int cutoff = 1; cutoff <= (int) dataset_and_workload.get_max_length(); cutoff++) {
-                    for (double seed_fpr = 0.0001; seed_fpr <= 0.95; seed_fpr = min(seed_fpr + 0.1, seed_fpr * 10)) {
+                    for (double seed_fpr = 0.000001; seed_fpr <= 0.95; seed_fpr = min(seed_fpr + 0.1, seed_fpr * 10)) {
                         bool do_print = false;
                         RichMultiBloom *pq = new RichMultiBloom(dataset_and_workload, seed_fpr,
                                                                 cutoff, do_print);
@@ -208,11 +208,11 @@ public:
         {
             {
                 double frontier_area = frontier->get_area();
-                double frontier_line_length = frontier->get_line_length();
+                LineLength frontier_line_length = frontier->get_line_length();
                 frontiers << "|frontier.area|: " << frontier_area << endl;
                 cout << "|frontier.area|: " << frontier_area << endl;
-                frontiers << "|frontier.square_area|: " << frontier_line_length << endl;
-                cout << "|frontier.square_area|: " << frontier_line_length << endl;
+                frontiers << "|frontier.square_area|: " << frontier_line_length.to_string() << endl;
+                cout << "|frontier.square_area|: " << frontier_line_length.to_string() << endl;
             }
             cout << "INIT FROM CHILDREN" << endl;
 
@@ -239,16 +239,16 @@ public:
 
         {
             double frontier_area = frontier->get_area();
-            double frontier_line_length = frontier->get_line_length();
+            LineLength frontier_line_length = frontier->get_line_length();
             frontiers << "|frontier.area|: " << frontier_area << endl;
             cout << "|frontier.area|: " << frontier_area << endl;
-            frontiers << "|frontier.square_area|: " << frontier_line_length << endl;
-            cout << "|frontier.square_area|: " << frontier_line_length << endl;
+            frontiers << "|frontier.square_area|: " << frontier_line_length.to_string() << endl;
+            cout << "|frontier.square_area|: " << frontier_line_length.to_string() << endl;
 
         }
 
         double prev_area = frontier->get_area();
-        double prev_line_length = frontier->get_line_length();
+        LineLength prev_line_length = frontier->get_line_length();
 
         while(true) {
             frontiers << "NEW META ITER " << meta_iter << endl;
@@ -264,14 +264,14 @@ public:
             {
                 cout << "DONE META ITER " << meta_iter-1 << endl;
                 double frontier_area = frontier->get_area();
-                double frontier_line_length = frontier->get_line_length();
+                LineLength frontier_line_length = frontier->get_line_length();
                 frontiers << "|frontier.area|: " << frontier_area << endl;
                 cout << "|frontier.area|: " << frontier_area << endl;
-                frontiers << "|frontier.square_area|: " << frontier_line_length << endl;
-                cout << "|frontier.square_area|: " << frontier_line_length << endl;
+                frontiers << "|frontier.square_area|: " << frontier_line_length.to_string() << endl;
+                cout << "|frontier.square_area|: " << frontier_line_length.to_string() << endl;
 
                 if(prev_line_length == frontier_line_length) {
-                    if (prev_area - frontier_area < frontier_area * 0.25/20) {
+                    if (prev_area - frontier_area < frontier_area * 0.17/20) {
                         frontiers << "IMPROVEMENT TOO SMALL; BREAK;" << endl << endl;
                         cout << "IMPROVEMENT TOO SMALL; BREAK;" << endl << endl;
                         break;
@@ -319,7 +319,7 @@ public:
         cout << " |workload| = " << dataset_and_workload.get_workload().size() <<" |dataset| = " << dataset_and_workload.get_dataset().size() << endl;
         cout << endl;
 
-        if(dataset_and_workload.get_dataset().size() == 0)
+        if(dataset_and_workload.get_dataset().empty())
         {
             Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload);
             return make_pair(base_case_frontier, base_case_frontier);
@@ -441,12 +441,13 @@ public:
 //            left_pq->get_params().get_pq()->assert_contains = true;
 //            right_pq->get_params().get_pq()->assert_contains = true;
 
-                HybridPointQuery* pq =
-                        new HybridPointQuery(
-                                best_split,
-                                dataset_and_workload.original_meta_data,
-                                left_pq->get_params().get_pq()->clone(),
-                                right_pq->get_params().get_pq()->clone());
+//                HybridPointQuery* pq =
+//                        new HybridPointQuery(
+//                                best_split,
+//                                dataset_and_workload.original_meta_data,
+//                                left_pq->get_params().get_pq()->clone(),
+//                                right_pq->get_params().get_pq()->clone());
+////
 //            RangeFilterScore rez1 = dataset_and_workload.eval_point_query(pq);
 
                 int num_negatives =
@@ -457,6 +458,13 @@ public:
                 assert(left_pq->get_params().get_pq()->get_num_false_negatives() +
                        right_pq->get_params().get_pq()->get_num_false_negatives() == 0);
 
+                int memory =
+                        left_pq->get_params().get_pq()->get_memory_from_score() +
+                        right_pq->get_params().get_pq()->get_memory_from_score() +
+                        best_split.size()*sizeof(char)*8;
+
+                HybridPointQuery* pq = new HybridPointQuery(dataset_and_workload.original_meta_data);
+
                 RangeFilterScore rez2(
                         pq,
                         (int)dataset_and_workload.get_dataset().size(),
@@ -465,7 +473,9 @@ public:
                         right_pq->get_params().get_pq()->get_num_false_positives(),
                         num_negatives,
                         0,
-                        (int)pq->get_memory()*8);
+//                        (int)pq->get_memory()*8
+                        memory
+                        );
 
 
 //            if(!(rez1 == rez2))
@@ -475,7 +485,14 @@ public:
 
                 pq->set_score(rez2);
 
-                ret->insert(PointQueryPointer(pq), rez2.get_score_as_vector());
+                if(ret->insert(PointQueryPointer(pq), rez2.get_score_as_vector()) != nullptr)
+                {
+                    pq->set_split(
+                            best_split,
+                            left_pq->get_params().get_pq()->clone(),
+                            right_pq->get_params().get_pq()->clone());
+                    assert(pq->get_memory()*8 == rez2.get_memory());
+                }
             }
         }
 

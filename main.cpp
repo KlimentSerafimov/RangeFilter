@@ -353,7 +353,7 @@ int main() {
             Frontier<HybridRangeFilterSynthesizer::PointQueryPointer> *ret =
                     HybridRangeFilterSynthesizer::construct_hybrid_point_query(local_dataset_and_workload, ground_truth, vector<string>(1, "root")).first;
 
-            ofstream dt_out("tree_of_hybrid_hard50k_cutoff1.3__only_multi_bloom.out");
+            ofstream dt_out("tree_of_hybrid_hard50k_base100_longer__only_multi_bloom.out");
 
             ret->print(dt_out);
 

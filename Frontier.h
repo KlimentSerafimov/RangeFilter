@@ -14,8 +14,12 @@
 #include <functional>
 #include <fstream>
 #include <algorithm>
+#include <sstream>
+#include <iomanip>
 
 using namespace std;
+
+class RichMultiBloomParams;
 
 /**
  * class FrontierPoint:
@@ -34,6 +38,38 @@ using namespace std;
     def __repr__(self):
         return str(self.bot) + " " + str(self.point)
 */
+
+
+class LineLength: public pair<double, double>
+{
+public:
+    LineLength(double _f, double _s): pair<double, double>(_f, _s) {}
+    string to_string()
+    {
+        std::ostringstream streamObj;
+        streamObj << setprecision(8) <<  first <<" "<< second;
+        std::string strObj = streamObj.str();
+        return strObj;
+    }
+
+    bool operator < (const LineLength& other) const {
+        if(first < other.first && second < other.second) {
+            return true;
+        }
+        else if((first <= other.first) != (second <= other.second)) {
+            assert(false);
+        }
+        else if(first == other.first) {
+            return second < other.second;
+        }
+        else if(second == other.second) {
+            return first < other.first;
+        }
+        else {
+            assert(false);
+        }
+    }
+};
 
 
 template<typename ParamsType>
@@ -146,6 +182,9 @@ class Frontier
 */
     void _remove_erased()
     {
+        if(num_erased == 0) {
+            return;
+        }
         vector<FrontierPoint<ParamsType>* > new_frontier;
         for(FrontierPoint<ParamsType>* point : frontier)
         {
@@ -156,6 +195,7 @@ class Frontier
         }
         frontier = new_frontier;
         num_erased = 0;
+        sorted = false;
     }
 
 public:
@@ -164,20 +204,27 @@ public:
 
     explicit Frontier(size_t _num_objectives): num_objectives(_num_objectives){}
 
+    bool sorted = false;
+
     void sort()
     {
+        if(sorted) {
+            return;
+        }
         _remove_erased();
         std::sort(frontier.begin(), frontier.end(),
              [ ]( const FrontierPoint<ParamsType>* lhs, const FrontierPoint<ParamsType>* rhs )
                 {
                     return (*lhs) < (*rhs);
                 });
+        sorted = true;
     }
 
     void print(ostream& out, int print_top = -1, bool decorate = false)
     {
         sort();
         reverse(frontier.begin(), frontier.end());
+        sorted = false;
         int init_print = 0;
 
         if(decorate)
@@ -213,6 +260,9 @@ public:
     const FrontierPoint<ParamsType>* insert(const ParamsType& params, const vector<double>& score)
     {
         assert(num_objectives == score.size());
+
+        double init_area = get_area();
+        LineLength init_line_length = get_line_length();
 
 /**
         new_point_is_dominated = False
@@ -290,6 +340,17 @@ public:
             }
 
             changed = true;
+            sorted = false;
+
+
+            if(is_same<ParamsType, RichMultiBloomParams>::value) {
+                if (init_area < get_area()) {
+                    assert(init_line_length < get_line_length());
+                } else {
+                    assert(init_area >= get_area());
+                }
+            }
+
             return new_point;
         }
         else
@@ -308,7 +369,7 @@ public:
                 ret += 1
         return ret
 */
-    size_t get_size()
+    size_t get_size() const
     {
         return frontier.size()-num_erased;
     }
@@ -384,26 +445,59 @@ public:
     long double get_area()
     {
         assert(num_objectives == 2);
+        if(frontier.empty())
+        {
+            return numeric_limits<double>::max();
+        }
+        assert(frontier.size() >= 1);
         sort();
         double ret = 0;
         double left = 0;
-        for(size_t i = 0;i<frontier.size();i++)
-        {
-            ret += (frontier[i]->get_score_as_vector()[0] - left)*frontier[i]->get_score_as_vector()[1];
-            left = frontier[i]->get_score_as_vector()[0];
+        for(size_t i = 0;i<frontier.size();i++) {
+            if(i == 0) {
+                ret += (frontier[i]->get_score_as_vector()[0] - left) * frontier[i]->get_score_as_vector()[1];
+                left = frontier[i]->get_score_as_vector()[0];
+            }
+            else {
+                ret += (frontier[i]->get_score_as_vector()[0] - left) * frontier[i - 1]->get_score_as_vector()[1];
+                left = frontier[i]->get_score_as_vector()[0];
+            }
         }
         return ret;
     }
 
-    long double get_line_length()
+    LineLength get_line_length()
     {
         assert(num_objectives == 2);
+        if(frontier.empty()) {
+            return LineLength(-numeric_limits<double>::max(), -numeric_limits<double>::max());
+        }
         sort();
-        return
-        (frontier[0]->get_score_as_vector()[1] - (*frontier.rbegin())->get_score_as_vector()[1])
-//        *
-//        (frontier[0]->get_score_as_vector()[1] - (*frontier.rbegin())->get_score_as_vector()[1])
-        ;
+        assert(frontier.size() >= 1);
+
+        double x = (*frontier.begin())->get_score_as_vector()[0];
+        double y = (*frontier.rbegin())->get_score_as_vector()[1];
+
+        if(is_same<ParamsType, RichMultiBloomParams>::value) {
+            assert(x >= 0);
+            assert(y >= 0);
+        }
+
+        return LineLength(-x, -y);
+
+//        if(x >= 0 && y >= 0)
+//        {
+//            return -x*y;
+//        }
+//        else if((x > 0) != (y > 0))
+//        {
+//            return -x*y;
+//        }
+//        else
+//        {
+//            assert(x < 0 && y < 0);
+//            return x*y;
+//        }
     }
 
 
