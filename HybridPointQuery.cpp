@@ -43,7 +43,7 @@ HybridPointQueryParams::HybridPointQueryParams(const HybridPointQueryParams &to_
     assert(meta_data.num_bits_per_char == 6 || meta_data.num_bits_per_char == -1);
     for(size_t i = 0;i<sub_point_query_params.size();i++)
     {
-        sub_point_query_params.push_back(sub_point_query_params[i]->clone());
+        sub_point_query_params.push_back(sub_point_query_params[i]->clone_params());
     }
 }
 HybridPointQuery::HybridPointQuery(const DatasetAndWorkload &dataset_and_workload, const string &midpoint,

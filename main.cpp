@@ -165,6 +165,9 @@ public:
     {
         return std::to_string(x);
     }
+    void clear()
+    {
+    }
 };
 
 #include "SurfPointQuery.h"
@@ -278,7 +281,7 @@ int main() {
         return 0;
     }
 
-    DatasetAndWorkload dataset_and_workload(file_path, workload_difficulty, false);
+    DatasetAndWorkload dataset_and_workload(file_path, workload_difficulty, true);
 
     bool debug = false;
     if(debug) {
@@ -348,7 +351,7 @@ int main() {
 
             local_dataset_and_workload.get_negative_workload();
             Frontier<HybridRangeFilterSynthesizer::PointQueryPointer> *ret =
-                    HybridRangeFilterSynthesizer::construct_hybrid_point_query(local_dataset_and_workload, ground_truth, vector<string>(1, "root"));
+                    HybridRangeFilterSynthesizer::construct_hybrid_point_query(local_dataset_and_workload, ground_truth, vector<string>(1, "root")).first;
 
             ofstream dt_out("tree_of_hybrid_hard50k_cutoff1.3__only_multi_bloom.out");
 
@@ -502,7 +505,7 @@ void grid_search(DatasetAndWorkload& dataset_and_workload, const string& _range_
 
                 if(range_filter_type == "multi_bloom") {
                     MultiBloomParams *params = (MultiBloomParams *)ret.get_params();
-                    frontier.insert(*(params->clone()), ret.get_score_as_vector());
+                    frontier.insert(*params, ret.get_score_as_vector());
                 }
                 delete rf;
                 pq->clear();

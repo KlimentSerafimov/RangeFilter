@@ -32,6 +32,14 @@ protected:
 
 public:
 
+
+    void clear()
+    {
+        assert(!is_cleared());
+        params.clear();
+        set_cleared_to(true);
+    }
+
 //    MultiBloomParams() { assert(false); }
 
     MultiBloomParams(const MultiBloomParams& to_clone): PointQueryParams(to_clone), params(to_clone.params), cutoff(to_clone.cutoff) {
@@ -50,7 +58,7 @@ public:
         cutoff = new_params.cutoff;
     }
 
-    MultiBloomParams* clone() const override
+    MultiBloomParams* clone_params() const override
     {
         return new MultiBloomParams(*this);
     }
@@ -78,12 +86,12 @@ class RichMultiBloomParams: virtual public MultiBloomParams
 {
 
 private:
-    size_t iter_id = 0;
-    size_t epoch_id = 0;
-    size_t used_for_reinit_count = 0;
+    mutable size_t iter_id = 0;
+    mutable size_t epoch_id = 0;
+    mutable size_t used_for_reinit_count = 0;
 public:
 
-    RichMultiBloomParams* clone() const override
+    RichMultiBloomParams* clone_params() const override
     {
         RichMultiBloomParams* ret = new RichMultiBloomParams(*this);
         ret->iter_id = iter_id;
@@ -118,7 +126,7 @@ public:
         return iter_id;
     }
 
-    void used_for_reinit() {
+    void used_for_reinit() const {
         used_for_reinit_count+=1;
         epoch_id+=1;
     }
@@ -147,7 +155,7 @@ protected:
     vector<bloom_filter> bfs;
 private:
 
-    void calc_metadata(const vector<string>& dataset, bool do_print)
+    void calc_metadata(bool do_print)
     {
         const int calc_unique_prefixes_lvl = 9;
 
@@ -223,11 +231,17 @@ protected:
         }
     }
 
+    const vector<string>& dataset;
+
 public:
 
 //    void set_score(const RangeFilterScore& score) override {
 //        PointQuery::set_score(score);
 //    }
+
+    void populate_params(vector<MultiBloomParams *> &ret_params) {
+        ret_params.push_back(new MultiBloomParams(*this));
+    }
 
     static vector<string> split(string str, const string& delim)
     {
@@ -284,21 +298,17 @@ public:
         return params;
     }
 
-    MultiBloomParams* clone() const override
+    MultiBloomParams* clone_params() const override
     {
-        return MultiBloomParams::clone();
+        return MultiBloomParams::clone_params();
     }
 
     MultiBloom() = default;
 
-    MultiBloom(const vector<string>& dataset, double _seed_fpr, int _cutoff = -1, bool do_print = false):
-    MultiBloomParams(_cutoff){
+    MultiBloom(const vector<string>& _dataset, double _seed_fpr, int _cutoff = -1, bool do_print = false):
+    MultiBloomParams(_cutoff), dataset(_dataset){
         assert(cutoff >= 1);
-//        for(int i = 0;i<dataset.size();i++)
-//        {
-//            cout << dataset[i] << endl;
-//        }
-        calc_metadata(dataset, do_print);
+        calc_metadata(do_print);
         size_t max_lvl = num_prefixes_per_level.size();
         max_lvl = min(max_lvl, (size_t)cutoff);
         cutoff = min(cutoff, (int)max_lvl);
@@ -310,17 +320,35 @@ public:
         init();
     }
 
-    MultiBloom(const vector<string>& dataset, const MultiBloomParams& _params, bool do_print = false):
+    MultiBloom* clone() override {
+        return new MultiBloom(dataset, *this, false);
+    }
+
+    MultiBloom(const vector<string>& _dataset, const MultiBloomParams& _params, bool do_print = false):
         PointQueryParams(_params),
-        MultiBloomParams(_params) {
-        calc_metadata(dataset, do_print);
+        MultiBloomParams(_params),
+        dataset(_dataset) {
+        calc_metadata(do_print);
+
+        size_t max_lvl = num_prefixes_per_level.size();
+        max_lvl = min(max_lvl, (size_t)cutoff);
+        cutoff = min(cutoff, (int)max_lvl);
+        size_t min_num_elements = 4;
+        for(size_t i = 0;i<max_lvl;i++){
+            assert(i < params.size());
+            params[i].first = num_prefixes_per_level[i]+min_num_elements;
+//            params.emplace_back(num_prefixes_per_level[i]+min_num_elements, _seed_fpr);
+        }
+
         init();
     }
 
 
 
-    MultiBloom(const vector<string>& dataset, const string& line, bool do_print = false): MultiBloomParams(init_from_string(line)) {
-        calc_metadata(dataset, do_print);
+    MultiBloom(const vector<string>& _dataset, const string& line, bool do_print = false):
+    MultiBloomParams(init_from_string(line)),
+    dataset(_dataset) {
+        calc_metadata(do_print);
 
         init();
     }
@@ -379,6 +407,8 @@ public:
             bfs[i].clear_memory();
         }
         bfs.clear();
+        MultiBloomParams::clear();
+        assert(is_cleared());
     }
 
     string to_string() const override
@@ -397,9 +427,13 @@ class RichMultiBloom:  public RichMultiBloomParams, public MultiBloom {
 
 public:
 
-    RichMultiBloomParams* clone() const override
-    {
+    RichMultiBloomParams* clone_params() const override{
         assert(false);
+    }
+
+    RichMultiBloom* clone(const DatasetAndWorkload& dataset_and_workload) const
+    {
+        return new RichMultiBloom(dataset_and_workload, *(MultiBloomParams*)this);
     }
 
     string to_string() const override
@@ -416,8 +450,9 @@ public:
 
     void reinitialize(const RichMultiBloomParams& new_params)
     {
-        RichMultiBloomParams::reinitialize(new_params);
         clear();
+        set_cleared_to(false);
+        RichMultiBloomParams::reinitialize(new_params);
         init();
     }
 

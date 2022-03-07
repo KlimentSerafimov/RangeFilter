@@ -16,7 +16,7 @@
 
 using namespace std;
 
-class OneBloomParams: public PointQueryParams
+class OneBloomParams: public virtual PointQueryParams
 {
 protected:
     double seed_fpr;
@@ -111,6 +111,8 @@ public:
     void clear() override
     {
         bf.clear_memory();
+        OneBloomParams::clear();
+        assert(is_cleared());
     }
 };
 

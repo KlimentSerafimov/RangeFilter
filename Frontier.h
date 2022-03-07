@@ -51,10 +51,11 @@ public:
         return is_erased_;
     }
 
-    void erase() const
+    void erase()
     {
         assert(!is_erased());
         is_erased_ = true;
+        params.clear();
     }
 
     double operator [](size_t dim_id) const
@@ -263,7 +264,7 @@ public:
 */
         if(!new_point_is_dominated)
         {
-            for(const FrontierPoint<ParamsType>* point: frontier) {
+            for(FrontierPoint<ParamsType>* point: frontier) {
                 if(point->is_erased()) {
                     continue;
                 }
@@ -321,6 +322,10 @@ public:
     const vector<FrontierPoint<ParamsType>* >& get_frontier()
     {
         sort();
+        return frontier;
+    }
+
+    const vector<FrontierPoint<ParamsType>* >& get_frontier_const() const {
         return frontier;
     }
 
@@ -388,6 +393,17 @@ public:
             left = frontier[i]->get_score_as_vector()[0];
         }
         return ret;
+    }
+
+    long double get_line_length()
+    {
+        assert(num_objectives == 2);
+        sort();
+        return
+        (frontier[0]->get_score_as_vector()[1] - (*frontier.rbegin())->get_score_as_vector()[1])
+//        *
+//        (frontier[0]->get_score_as_vector()[1] - (*frontier.rbegin())->get_score_as_vector()[1])
+        ;
     }
 
 

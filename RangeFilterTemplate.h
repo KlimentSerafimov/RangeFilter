@@ -359,6 +359,8 @@ public:
     }
 
     pair<double, string>* analyze_negative_point_query_density_heatmap(const DatasetAndWorkload& dataset_and_workload);
+
+    void set_point_query(PointQuery *new_pq);
 };
 
 

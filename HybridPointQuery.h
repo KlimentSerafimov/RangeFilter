@@ -30,9 +30,19 @@ protected:
     }
 
 public:
+    void clear() override {
+        assert(!is_cleared());
+        for(auto it: sub_point_query_params)
+        {
+            it->clear();
+        }
+        splits.clear();
+        sub_point_query_params.clear();
+        set_cleared_to(true);
+    }
     explicit HybridPointQueryParams(const DatasetAndWorkloadMetaData& _meta_data);
     HybridPointQueryParams(const HybridPointQueryParams& to_copy);
-    virtual HybridPointQueryParams* clone() const override
+    virtual HybridPointQueryParams* clone_params() const override
     {
         return new HybridPointQueryParams(*this);
     }
@@ -60,14 +70,34 @@ public:
         assert(invariant());
     }
 
+    HybridPointQuery* clone() override
+    {
+        assert(n == 2);
+        return new HybridPointQuery(
+                splits[0],
+                meta_data,
+                sub_point_query[0]->clone(),
+                sub_point_query[1]->clone(),
+                false
+                );
+    }
+
+
+    void populate_params(vector<MultiBloomParams *> &ret_params) override {
+        for(auto it: sub_point_query)
+        {
+            it->populate_params(ret_params);
+        }
+    }
+
     void set_score(const RangeFilterScore& _eval_stats) override {
         HybridPointQueryParams::set_score(_eval_stats);
         PointQuery::set_score(_eval_stats);
     }
 
 
-    HybridPointQueryParams* clone() const override{
-        return HybridPointQueryParams::clone();
+    HybridPointQueryParams* clone_params() const override{
+        return HybridPointQueryParams::clone_params();
     }
 
     bool contains(const string& s, const string& left_str, const string& right_str) override
@@ -158,14 +188,7 @@ public:
     }
 
     void clear() override {
-        for(size_t i = 0;i<sub_point_query_params.size();i++) {
-            sub_point_query[i]->clear();
-        }
-        sub_point_query_params.clear();
-        for(size_t i =0;i<splits.size();i++) {
-            splits[i].clear();
-        }
-        splits.clear();
+        HybridPointQueryParams::clear();
     }
 
     string to_string() const override

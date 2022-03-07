@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include "cassert"
+#include "iostream"
 using namespace std;
 
 class PointQuery;
@@ -89,29 +90,70 @@ public:
     int get_num_false_negatives() const;
 };
 
+static int pqp_global_id = 0;
+
 class PointQueryParams
 {
+    void init()
+    {
+        pqp_id = pqp_global_id++;
+//        cout << "pqp_id: "<< pqp_id << endl;
+    }
 protected:
-    explicit PointQueryParams(const PointQueryParams* to_clone): is_score_set(to_clone->is_score_set), score(to_clone->score) {}
+    explicit PointQueryParams(const PointQueryParams* to_clone): is_score_set(to_clone->is_score_set), score(to_clone->score) {
+        init();
+    }
+    explicit PointQueryParams(const PointQueryParams& to_clone):
+    is_score_set(to_clone.is_score_set), score(to_clone.score) {
+        assert(!to_clone.cleared);
+        init();
+    }
 public:
-    PointQueryParams() = default;
+    bool is_cleared()
+    {
+        return cleared;
+    }
+    int pqp_id = -1;
+    int modify_cleared_id = -1;
+    PointQueryParams() {init();};
     virtual string to_string() const
     {
         assert(false);
         return "";
     }
-    virtual PointQueryParams* clone() const
+    virtual PointQueryParams* clone_params() const
     {
         assert(false);
         return nullptr;
     }
 
+    void set_cleared_to(bool set_to)
+    {
+//        if(pqp_id == 1580)
+//        {
+//            cout << "here " << modify_cleared_id << endl;
+//            cout << endl;
+//        }
+        if(modify_cleared_id == -1) {
+            modify_cleared_id = 0;
+        }
+        modify_cleared_id+=1;
+        assert(cleared == !set_to);
+        cleared = set_to;
+    }
+
 private:
+    bool cleared = false;
     bool is_score_set = false;
     RangeFilterScore score;
     bool has_prev_score = false;
     RangeFilterScore prev_score;
 public:
+
+    virtual void clear()
+    {
+        assert(false);
+    }
     bool get_is_score_set() const
     {
         return is_score_set;
@@ -180,11 +222,24 @@ public:
 
 #include <map>
 
+class MultiBloomParams;
+
 class PointQuery: virtual public PointQueryParams
 {
 protected:
     bool has_range_query = false;
 public:
+
+    virtual PointQuery* clone()
+    {
+        assert(false);
+    }
+
+    virtual void populate_params(vector<MultiBloomParams *> &ret_params)
+    {
+        assert(false);
+    }
+
     PointQuery(): PointQueryParams() {}
 
     bool get_has_range_query() const

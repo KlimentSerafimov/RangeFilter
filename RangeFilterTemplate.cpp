@@ -38,10 +38,16 @@ RangeFilterTemplate::RangeFilterTemplate(const DatasetAndWorkload &dataset_and_w
 
 class MyString: public string
 {
+    bool cleared = false;
 public:
     MyString(string str): string(std::move(str)) {}
     string to_string() const {
         return *this;
+    }
+    void clear() {
+        assert(!cleared);
+        string::clear();
+        cleared = true;
     }
 };
 
@@ -247,4 +253,8 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(const DatasetA
     reset();
 
     return ret;
+}
+
+void RangeFilterTemplate::set_point_query(PointQuery *new_pq) {
+    pq = new_pq;
 }

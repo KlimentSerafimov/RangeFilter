@@ -26,7 +26,8 @@ class HybridRangeFilterSynthesizer
 public:
     class PointQueryPointer
     {
-        PointQuery* pq;
+        bool cleared = false;
+        PointQuery* pq = nullptr;
 
     public:
         string to_string() const
@@ -39,7 +40,15 @@ public:
 
         PointQuery* get_pq() const
         {
+            assert(pq != nullptr);
             return pq;
+        }
+
+        void clear()
+        {
+            assert(pq != nullptr);
+            pq->clear();
+            cleared = true;
         }
     };
 private:
@@ -54,10 +63,6 @@ private:
             const vector<pair<string, string> >& workload = dataset_and_workload.get_workload();
             SurfPointQuery *surf_pq = new SurfPointQuery(dataset, trie_size);
             RangeFilterTemplate *surf_rf = new RangeFilterTemplate(dataset_and_workload, surf_pq);
-            if(id_ == 176931)
-            {
-                dataset_and_workload.print(cout);
-            }
 
             test_surf(dataset, workload, trie_size);
 
@@ -108,9 +113,12 @@ private:
         return ret;
     }
 
-    static Frontier<PointQueryPointer>* optimize_base_case(const DatasetAndWorkload& dataset_and_workload) {
+    static Frontier<PointQueryPointer>* optimize_base_case(
+            const DatasetAndWorkload& dataset_and_workload,
+            const vector<MultiBloomParams*>* init_frontier = nullptr) {
         Frontier<PointQueryPointer>* ret = nullptr;
-        ret = optimize_base_case_with_multi_bloom(dataset_and_workload);
+
+        ret = optimize_base_case_with_multi_bloom(dataset_and_workload, init_frontier);
 
         for(auto it: ret->get_frontier()){
             assert(it->get_params().get_pq()->get_is_score_set());
@@ -124,87 +132,158 @@ private:
 
 public:
 
-    static Frontier<PointQueryPointer>* optimize_base_case_with_multi_bloom(const DatasetAndWorkload& dataset_and_workload)
+    static Frontier<PointQueryPointer>* optimize_base_case_with_multi_bloom(
+            const DatasetAndWorkload& dataset_and_workload,
+            const vector<MultiBloomParams*>* init_params = nullptr)
     {
         ofstream frontiers = ofstream ("frontiers.out");
         int meta_iter = 1;
 
-        bool fresh_init = true;
+        Frontier<RichMultiBloomParams> *frontier = new Frontier<RichMultiBloomParams>(2);
 
-        Frontier<RichMultiBloomParams>* frontier = new Frontier<RichMultiBloomParams>(2);
+            bool fresh_init = true;
 
-        if(fresh_init) {
+            if (fresh_init) {
 
-            for(int cutoff = 1; cutoff <= (int)dataset_and_workload.get_max_length(); cutoff++) {
-                for (double seed_fpr = 0.0001; seed_fpr <= 0.95; seed_fpr = min(seed_fpr + 0.075, seed_fpr * 2)) {
+                for (int cutoff = 1; cutoff <= (int) dataset_and_workload.get_max_length(); cutoff++) {
+                    for (double seed_fpr = 0.0001; seed_fpr <= 0.95; seed_fpr = min(seed_fpr + 0.1, seed_fpr * 10)) {
+                        bool do_print = false;
+                        RichMultiBloom *pq = new RichMultiBloom(dataset_and_workload, seed_fpr,
+                                                                cutoff, do_print);
+                        auto *rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
+                        const RangeFilterScore &ret = *dataset_and_workload.test_range_filter(rf, do_print);
+
+                        RichMultiBloom *tmp_rmb_pq = (RichMultiBloom *) ret.get_params();
+                        RichMultiBloomParams *tmp_params = (tmp_rmb_pq->add_iter_and_epoch(1, 0));
+                        tmp_params->set_score(ret);
+                        bool inserted = frontier->insert(*tmp_params, ret.get_score_as_vector()) != nullptr;
+
+                        if(inserted)
+                        cout << ret.to_string() << endl;
+                    }
+                }
+                cout << "DONE INIT" << endl;
+            }
+            else {
+
+                string file_name = "frontier_from_file.out";
+
+                ifstream fin(file_name);
+
+                int line_id = 0;
+                for (string line; getline(fin, line);) {
+
+                    cout << "READING AND PROCESSING line_id " << line_id++ << endl;
+                    cout << line << endl;
+
                     bool do_print = false;
-                    RichMultiBloom *pq = new RichMultiBloom(dataset_and_workload, seed_fpr,
-                                                            cutoff, do_print);
+                    RichMultiBloom *pq = new RichMultiBloom(dataset_and_workload, line, do_print);
                     auto *rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
-                    const RangeFilterScore& ret = *dataset_and_workload.test_range_filter(rf, do_print);
+                    const RangeFilterScore &ret = *dataset_and_workload.test_range_filter(rf, do_print);
+                    RichMultiBloom &tmp_rmb_pq = *(RichMultiBloom *) ret.get_params();
+                    RichMultiBloomParams &tmp_params = *(tmp_rmb_pq.add_iter_and_epoch(1, 0));
+                    assert(false); // NEED TO UPDATE SCORE IN tmp_params TO ret.
+                    auto new_point = frontier->insert(tmp_params, ret.get_score_as_vector());
+                    cout << "RESULT" << endl;
 
-                    RichMultiBloom* tmp_rmb_pq = (RichMultiBloom *) ret.get_params();
-                    RichMultiBloomParams* tmp_params = (tmp_rmb_pq->add_iter_and_epoch(1, 0));
-                    tmp_params->set_score(ret);
-                    frontier->insert(*tmp_params, ret.get_score_as_vector());
+                    if (new_point == nullptr) {
+                        cout << "NULLPTR" << endl;
+                        continue;
+                    }
 
-                    cout << ret.to_string() << endl;
+                    vector<string> dim_names;
+                    dim_names.emplace_back("bpk");
+                    dim_names.emplace_back("fpr");
+                    string result_line = new_point->to_string(dim_names);
+                    cout << result_line << endl;
+                    //                assert(RichMultiBloom::split(result_line, "METAPARAMS")[0] == RichMultiBloom::split(line, "METAPARAMS")[0]);
                 }
-            }
-            cout << "DONE INIT" << endl;
-        }
 
-        else
+                frontier->print(cout);
+
+                meta_iter = 3;
+            }
+
+        if(init_params != nullptr)
         {
+            {
+                double frontier_area = frontier->get_area();
+                double frontier_line_length = frontier->get_line_length();
+                frontiers << "|frontier.area|: " << frontier_area << endl;
+                cout << "|frontier.area|: " << frontier_area << endl;
+                frontiers << "|frontier.square_area|: " << frontier_line_length << endl;
+                cout << "|frontier.square_area|: " << frontier_line_length << endl;
+            }
+            cout << "INIT FROM CHILDREN" << endl;
 
-            string file_name = "frontier_from_file.out";
-
-            ifstream fin(file_name);
-
-            int line_id = 0;
-            for(string line; getline(fin, line); ) {
-
-                cout << "READING AND PROCESSING line_id " << line_id++ << endl;
-                cout << line << endl;
-
+            for(auto it: *init_params)
+            {
                 bool do_print = false;
-                RichMultiBloom *pq = new RichMultiBloom(dataset_and_workload, line, do_print);
+                RichMultiBloom *pq = new RichMultiBloom(dataset_and_workload, *it, do_print);
+                pq->reset_score();
                 auto *rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
-                const RangeFilterScore& ret = *dataset_and_workload.test_range_filter(rf, do_print);
-                RichMultiBloom &tmp_rmb_pq = *(RichMultiBloom *) ret.get_params();
-                RichMultiBloomParams &tmp_params = *(tmp_rmb_pq.add_iter_and_epoch(1, 0));
-                assert(false); // NEED TO UPDATE SCORE IN tmp_params TO ret.
-                auto new_point = frontier->insert(tmp_params, ret.get_score_as_vector());
-                cout << "RESULT" << endl;
+                const RangeFilterScore &ret = *dataset_and_workload.test_range_filter(rf, do_print);
 
-                if(new_point == nullptr)
-                {
-                    cout << "NULLPTR" << endl;
-                    continue;
-                }
+                RichMultiBloom *tmp_rmb_pq = (RichMultiBloom *) ret.get_params();
+                RichMultiBloomParams *tmp_params = (tmp_rmb_pq->add_iter_and_epoch(1, 0));
+                tmp_params->set_score(ret);
+                bool inserted = frontier->insert(*tmp_params, ret.get_score_as_vector()) != nullptr;
 
-                vector<string> dim_names;
-                dim_names.emplace_back("bpk");
-                dim_names.emplace_back("fpr");
-                string result_line = new_point->to_string(dim_names);
-                cout << result_line << endl;
-                //                assert(RichMultiBloom::split(result_line, "METAPARAMS")[0] == RichMultiBloom::split(line, "METAPARAMS")[0]);
+                if(inserted)
+                cout << ret.to_string() << endl;
             }
 
-            frontier->print(cout);
-
-            meta_iter = 3;
         }
 
         cout << "STARTING SIMULATED ANNEALING" << endl;
 
+        {
+            double frontier_area = frontier->get_area();
+            double frontier_line_length = frontier->get_line_length();
+            frontiers << "|frontier.area|: " << frontier_area << endl;
+            cout << "|frontier.area|: " << frontier_area << endl;
+            frontiers << "|frontier.square_area|: " << frontier_line_length << endl;
+            cout << "|frontier.square_area|: " << frontier_line_length << endl;
+
+        }
+
+        double prev_area = frontier->get_area();
+        double prev_line_length = frontier->get_line_length();
+
         while(true) {
             frontiers << "NEW META ITER " << meta_iter << endl;
+            cout << "NEW META ITER " << meta_iter << endl;
             frontier->changed = false;
             frontier = simulated_annealing(dataset_and_workload, frontiers, meta_iter++, frontier);
             if(!frontier->changed) {
                 frontiers << "NO MORE IMPROVEMENT" << endl;
+                cout << "NO MORE IMPROVEMENT" << endl;
                 break;
+            }
+            else
+            {
+                cout << "DONE META ITER " << meta_iter-1 << endl;
+                double frontier_area = frontier->get_area();
+                double frontier_line_length = frontier->get_line_length();
+                frontiers << "|frontier.area|: " << frontier_area << endl;
+                cout << "|frontier.area|: " << frontier_area << endl;
+                frontiers << "|frontier.square_area|: " << frontier_line_length << endl;
+                cout << "|frontier.square_area|: " << frontier_line_length << endl;
+
+                if(prev_line_length == frontier_line_length) {
+                    if (prev_area - frontier_area < frontier_area * 0.25/20) {
+                        frontiers << "IMPROVEMENT TOO SMALL; BREAK;" << endl << endl;
+                        cout << "IMPROVEMENT TOO SMALL; BREAK;" << endl << endl;
+                        break;
+                    }
+                }
+                else
+                {
+                    assert(prev_line_length < frontier_line_length);
+                }
+
+                prev_area = frontier_area;
+                prev_line_length = frontier_line_length;
             }
         }
 
@@ -222,10 +301,14 @@ public:
         return ret_frontier;
     }
 
-    static Frontier<PointQueryPointer>* construct_hybrid_point_query(
+    static pair<Frontier<PointQueryPointer>*, Frontier<PointQueryPointer>*>  construct_hybrid_point_query(
             const DatasetAndWorkload& dataset_and_workload, RangeFilterTemplate& ground_truth, vector<string> path)
     {
+        size_t base_case_min_size = 100;
+
         assert(!dataset_and_workload.get_workload().empty());
+
+        assert(dataset_and_workload.get_workload().size() >= base_case_min_size);
 
         //base case
 
@@ -233,14 +316,17 @@ public:
         for(const auto& it: path) {
             cout << it;
         }
+        cout << " |workload| = " << dataset_and_workload.get_workload().size() <<" |dataset| = " << dataset_and_workload.get_dataset().size() << endl;
         cout << endl;
 
-        Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload);
-
-        if(dataset_and_workload.get_dataset().size() < 100)
+        if(dataset_and_workload.get_dataset().size() == 0)
         {
-            return base_case_frontier;
+            Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload);
+            return make_pair(base_case_frontier, base_case_frontier);
         }
+
+
+
 
         assert(!dataset_and_workload.get_dataset().empty());
 
@@ -252,7 +338,8 @@ public:
         {
             //no need to split;
             //return base case;
-            return base_case_frontier;
+            Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload);
+            return make_pair(base_case_frontier, base_case_frontier);
         }
 
         pair<double, string> ratio_and_best_split = *_ratio_and_best_split;
@@ -281,9 +368,10 @@ public:
             }
         }
 
-        if(left_workload.empty() || right_workload.empty())
+        if(left_workload.size() < base_case_min_size || right_workload.size() < base_case_min_size)
         {
-            return base_case_frontier;
+            Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload);
+            return make_pair(base_case_frontier, base_case_frontier);
         }
 
         vector<string> left_dataset;
@@ -311,16 +399,18 @@ public:
         DatasetAndWorkload left_dataset_and_workload(left_dataset, left_workload, dataset_and_workload);
         path.push_back("L");
         left_dataset_and_workload.get_negative_workload();
-        Frontier<PointQueryPointer>* left_frontier = construct_hybrid_point_query(left_dataset_and_workload, ground_truth, path);
+        pair<Frontier<PointQueryPointer>*, Frontier<PointQueryPointer>*> _left_frontier = construct_hybrid_point_query(left_dataset_and_workload, ground_truth, path);
+        Frontier<PointQueryPointer>* left_frontier = _left_frontier.first;
         path.pop_back();
 
         path.push_back("R");
         DatasetAndWorkload right_dataset_and_workload(right_dataset, right_workload, dataset_and_workload);
         right_dataset_and_workload.get_negative_workload();
-        Frontier<PointQueryPointer>* right_frontier = construct_hybrid_point_query(right_dataset_and_workload, ground_truth, path);
+        pair<Frontier<PointQueryPointer>*, Frontier<PointQueryPointer>*> _right_frontier = construct_hybrid_point_query(right_dataset_and_workload, ground_truth, path);
+        Frontier<PointQueryPointer>* right_frontier = _right_frontier.first;
         path.pop_back();
 
-        Frontier<PointQueryPointer>* ret = base_case_frontier;
+        Frontier<PointQueryPointer>* ret = new Frontier<PointQueryPointer>(2);
 
         cout << "TRYING ALL COMBINATIONS " << left_frontier->get_size() <<" x "<< right_frontier->get_size() << endl;
 
@@ -351,7 +441,12 @@ public:
 //            left_pq->get_params().get_pq()->assert_contains = true;
 //            right_pq->get_params().get_pq()->assert_contains = true;
 
-                HybridPointQuery* pq = new HybridPointQuery(best_split, dataset_and_workload.original_meta_data, left_pq->get_params().get_pq(), right_pq->get_params().get_pq());
+                HybridPointQuery* pq =
+                        new HybridPointQuery(
+                                best_split,
+                                dataset_and_workload.original_meta_data,
+                                left_pq->get_params().get_pq()->clone(),
+                                right_pq->get_params().get_pq()->clone());
 //            RangeFilterScore rez1 = dataset_and_workload.eval_point_query(pq);
 
                 int num_negatives =
@@ -386,14 +481,30 @@ public:
 
         ret->print(cout, 10, true);
 
-        cout << "DONE WITH RECURSIVE STEP" << endl;
+        cout << "OPTIMIZE BASE" << endl;
 
+        vector<MultiBloomParams*> init_params;
+
+        for(auto it: _left_frontier.second->get_frontier()) {
+            it->get_params().get_pq()->populate_params(init_params);
+        }
+        for(auto it: _right_frontier.second->get_frontier()) {
+            it->get_params().get_pq()->populate_params(init_params);
+        }
+
+        Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload, &init_params);
+
+        for(auto it: base_case_frontier->get_frontier()) {
+            ret->insert(it->get_params(), it->get_score_as_vector());
+        }
+
+        cout << "DONE WITH RECURSIVE STEP" << endl;
 
         for(auto it: ret->get_frontier()){
             assert(it->get_params().get_pq()->get_is_score_set());
         }
 
-        return ret;
+        return make_pair(ret, base_case_frontier);
     }
 
 };

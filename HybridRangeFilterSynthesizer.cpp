@@ -24,7 +24,6 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
     int output_frontier_every = 2000;
     int hard_copy_every = 2500;
 
-    deque<double> past_area;
 
     if(frontier_p == nullptr) {
         frontier_p = new Frontier<RichMultiBloomParams>(2);
@@ -69,7 +68,8 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
         rf = _rf;
     }
 
-    past_area.push_back(frontier.get_area());
+    double prev_area = frontier.get_area();
+    double prev_line_length = frontier.get_line_length();
 
     annealing_epoch+=1;
 
@@ -80,7 +80,7 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
 
     assert(meta_iter >= 1);
     const size_t stagnation_count_cutoff_for_annealing_epoch_transition = 3*meta_iter;
-    const size_t max_reinitialization_count = 1;
+    const size_t max_reinitialization_count = 0;
 
     while(true)
     {
@@ -103,13 +103,18 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
             cout << "EPOCH " << annealing_epoch << endl;
         }
 
-        RichMultiBloom& local_tmp_rmb_pq = *(RichMultiBloom*)ret.get_params();
-        RichMultiBloomParams& local_tmp_params = *local_tmp_rmb_pq.add_iter_and_epoch(iter, annealing_epoch);
+        assert(pq == (RichMultiBloom*)ret.get_params());
+
+//        RichMultiBloomParams& local_tmp_params = *((RichMultiBloom*)ret.get_params())->add_iter_and_epoch(iter, annealing_epoch);
+        RichMultiBloomParams& local_tmp_params = *(pq)->add_iter_and_epoch(iter, annealing_epoch);
+
         local_tmp_params.set_score(ret);
+
         if(frontier.insert(local_tmp_params, ret.get_score_as_vector()))
         {
+            pq = pq->clone(dataset_and_workload);
+            rf->set_point_query(pq);
             double frontier_area = frontier.get_area();
-            past_area.push_back(frontier_area);
 
             success_count+=1;
             total_num_inserts+=1;
@@ -120,6 +125,7 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
             if(iter % output_step_count_every == 0) {
                 cout << "INSERT & CONTINUE" << endl;
                 cout << "|frontier.area|" << frontier_area << endl;
+                cout << "|frontier.line_len|" << frontier.get_line_length() << endl;
 
                 cout << "|frontier| = " << frontier.get_size() << endl;
                 cout << "|inserts| = " << total_num_inserts << endl;
@@ -135,6 +141,8 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
                 cout << "UNDO" << endl << "|stagnation| " << stagnation_count << endl;
                 double frontier_area = frontier.get_area();
                 cout << "|frontier.area|" << frontier_area << endl;
+                cout << "|frontier.line_len|" << frontier.get_line_length() << endl;
+
                 cout << "|frontier| = " << frontier.get_size() << endl;
                 cout << "|inserts| = " << total_num_inserts << endl;
             }
@@ -190,7 +198,12 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
 //                cout << "REINITIALIZE TO" << endl;
 //                cout << vec[oldest_params.second]->to_string(dim_names) << endl;
 
-                pq->reinitialize(vec[oldest_params.second]->get_params());
+                if (pq->is_cleared()) {
+                    assert(false);
+                    pq = new RichMultiBloom(dataset_and_workload, vec[oldest_params.second]->get_params());
+                } else {
+                    pq->reinitialize(vec[oldest_params.second]->get_params());
+                }
                 rf->insert_prefixes(dataset);
 
                 RichMultiBloomParams &params = vec[oldest_params.second]->get_params_to_modify();
@@ -241,6 +254,29 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
 
             frontier.print(frontiers, -1, false);
             frontiers << endl;
+
+        }
+
+        if(iter % output_step_count_every == 0){
+            double frontier_area = frontier.get_area();
+            double frontier_line_length = frontier.get_line_length();
+
+            if (prev_line_length == frontier_line_length) {
+                cout << "line_len NOT IMPROVED" << endl;
+                cout << "delta: " << prev_area - frontier_area << endl;
+                cout << "cutoff: " << frontier_area * 0.09 / 20 << endl;
+                if (prev_area - frontier_area < frontier_area * 0.09 / 20) {
+                    frontiers << "IMPROVEMENT TOO SMALL; BREAK;" << endl << endl;
+                    cout << "IMPROVEMENT TOO SMALL; BREAK;" << endl << endl;
+                    break_asap = true;
+                }
+            } else {
+                cout << "line_len IMPROVED" << endl;
+                assert(prev_line_length < frontier_line_length);
+            }
+
+            prev_area = frontier_area;
+            prev_line_length = frontier_line_length;
         }
 
         if(iter % hard_copy_every == 0 || break_asap) {

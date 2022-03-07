@@ -63,7 +63,6 @@ public:
         *max_length = 0;
 
         count_ret_false = 0;
-        delete this;
     }
 
     int sum_count_ret_false()

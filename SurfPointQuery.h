@@ -16,7 +16,7 @@ protected:
     {
         return std::to_string(trie_size);
     }
-    PointQueryParams* clone() const override
+    PointQueryParams* clone_params() const override
     {
         return new SurfPointQueryParams(trie_size);
     }
