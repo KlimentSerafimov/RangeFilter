@@ -17,7 +17,7 @@ using namespace std;
 
 void eval_trie_vs_rf()
 {
-    vector<string> dataset;
+    Dataset dataset;
     dataset.emplace_back("aaabbb");
     dataset.emplace_back("aaaqqq");
     dataset.emplace_back("aaazzz");
@@ -88,7 +88,7 @@ void eval_trie_vs_rf()
         string right_key = workload[i].second;
 
         bool ret = rf->query(left_key, right_key);
-        assert(contains(dataset, left_key, right_key) == ret);
+        assert(dataset.contains(left_key, right_key) == ret);
 
         if (!ret) {
             negative_workload.push_back(workload[i]);
@@ -256,8 +256,11 @@ void eval_rf_heatmap(DatasetAndWorkload& dataset_and_workload)
     }
 }
 
+#include <chrono>
+
 void meta_dataset_construction()
 {
+    auto begin = std::chrono::high_resolution_clock::now();
     string file_folder;
     string file_name = "1M_dataset.txt";
     string workload_difficulty = "medium"; //choose from "easy", "medium", "hard", "impossible", hybrid
@@ -275,6 +278,10 @@ void meta_dataset_construction()
 
     cout << original_ground_truth.get_negative_point_queries()/dataset_and_workload.get_negative_workload_assert_has().size() << endl;
 
+    auto end = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin);
+
+    printf("Time measured: %.3f seconds.\n", elapsed.count() * 1e-9);
 }
 
 int main() {
@@ -285,9 +292,9 @@ int main() {
 //    eval_trie_vs_rf();
 //    return 0;
 
-//    meta_dataset_construction();
-//
-//    return 0;
+    meta_dataset_construction();
+
+    return 0;
 
     string file_folder;
     string file_name = "50k_dataset.txt";
@@ -348,10 +355,11 @@ int main() {
 
 
             if (rf_rez != original_rez) {
-                ground_truth_point_query->trie->do_breakpoint = true;
-
-                ground_truth.query(dataset_and_workload.get_workload()[i].first,
-                                   dataset_and_workload.get_workload()[i].second);
+                assert(false);
+//                ground_truth_point_query->trie->do_breakpoint = true;
+//
+//                ground_truth.query(dataset_and_workload.get_workload()[i].first,
+//                                   dataset_and_workload.get_workload()[i].second);
             }
 
             assert(rf_rez == original_rez);

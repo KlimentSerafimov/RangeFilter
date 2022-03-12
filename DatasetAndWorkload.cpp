@@ -21,7 +21,7 @@ DatasetAndWorkload::test_range_filter(RangeFilterTemplate *rf, bool do_print) co
         string left_key = workload[i].first;
         string right_key = workload[i].second;
 
-        bool ground_truth = contains(dataset, left_key, right_key);
+        bool ground_truth = dataset.contains(left_key, right_key);
         bool prediction = rf->query(left_key, right_key);
 
         if (ground_truth) {
@@ -233,6 +233,37 @@ void DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, cons
     }
     else {
         assert(false);
+    }
+
+    for(size_t i = 1;i<dataset.size();i++)
+    {
+        assert(dataset[i-1] <= dataset[i]);
+    }
+
+}
+
+int Dataset::reads_from_cache = 0;
+int Dataset::total_reads = 0;
+int Dataset::cache_read_attempts = 0;
+
+void Dataset::remove_duplicates() {
+    size_t at_left = 0;
+    size_t at_right = 0;
+    while(at_left < this->size()) {
+        this->at(at_right) = this->at(at_left);
+        at_left++;
+        for (; at_left < this->size() && this->at(at_left) == this->at(at_right); at_left++);
+        at_right++;
+    }
+
+    while(size() > at_right) {
+        //NOT TESTED
+        pop_back();
+    }
+
+    for(size_t i = 1;i<size();i++) {
+        assert(at(i-1) != at(i));
+        assert(at(i-1) < at(i));
     }
 }
 

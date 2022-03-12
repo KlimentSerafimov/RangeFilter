@@ -24,11 +24,13 @@ class DatasetAndWorkloadMetaData;
 
 class DatasetAndWorkload;
 
-class GroundTruthPointQuery: public PointQuery
+
+
+class TriePointQuery: public PointQuery
 {
-public:
     Trie* trie;
-    GroundTruthPointQuery(): trie(new Trie()) {}
+public:
+    TriePointQuery(): trie(new Trie()) {}
 
     bool contains(const string& s) override
     {
@@ -49,8 +51,89 @@ public:
         assert(false);
         trie->clear();
     }
-
 };
+
+#include "DatasetAndWorkload.h"
+
+class MemorizedPointQuery: public PointQuery
+{
+    bool is_sorted = true;
+    vector<Dataset> datasets;
+    bool should_be_sorted = false;
+public:
+    
+    MemorizedPointQuery() { }
+
+    bool contains(const string& s) override {
+        assert(!s.empty());
+        if(!is_sorted) {
+            assert(!should_be_sorted);
+            for(auto dataset:datasets) {
+                sort(dataset.begin(), dataset.end());
+                dataset.remove_duplicates();
+            }
+            is_sorted = true;
+            should_be_sorted = true;
+        }
+        size_t dataset_id = s.size()-1;
+        assert(dataset_id < datasets.size());
+        Dataset& dataset = datasets[dataset_id];
+        return dataset.contains(s, s);
+    }
+
+//    bool range_query(const string& left_key, const string& right_key) override {
+//        if(!is_sorted) {
+//            assert(!should_be_sorted);
+//            sort(dataset.begin(), dataset.end());
+//            is_sorted = true;
+//            should_be_sorted = true;
+//        }
+//        return DatasetAndWorkload::contains(dataset, left_key, right_key);
+//    }
+
+    void insert(const string& s) override
+    {
+        assert(!s.empty());
+        size_t dataset_id = s.size()-1;
+        if(dataset_id >= datasets.size()) {
+            assert(dataset_id == datasets.size());
+            datasets.emplace_back();
+        }
+        assert(dataset_id < datasets.size());
+        Dataset& dataset = datasets[dataset_id];
+        if(!dataset.empty()) {
+            if(*dataset.rbegin() > s) {
+                assert(!should_be_sorted);
+                is_sorted = false;
+            }
+            else if(*dataset.rbegin() == s) {
+                return;
+            }
+        }
+        dataset.push_back(s);
+    }
+
+    unsigned long long get_memory() override {
+        unsigned long long ret = 0;
+        for(size_t dataset_id = 0; datasets.size();dataset_id++) {
+            const Dataset &dataset = datasets[dataset_id];
+            for (size_t i = 0; i < dataset.size(); i++) {
+                ret += dataset[i].size() * sizeof(char);
+            }
+        }
+        return ret;
+    }
+
+    void _clear() override {
+        assert(false);
+        for(auto dataset:datasets) {
+            dataset.clear();
+        }
+        datasets.clear();
+    }
+};
+
+class GroundTruthPointQuery: public MemorizedPointQuery {};
 
 class RangeFilterTemplate
 {
@@ -244,6 +327,7 @@ public:
                 while (left_id < (int)left.size()) {
                     //check non-boundary characters
                     //aaabc .. aaabz
+
                     for (char c = (char) ((int) left[left_id] + 1); c <= (char) ((int) max_char); c++) {
                         string local_prefix = left_prefix + c;
                         if (contains(local_prefix, left, right)) {
@@ -272,7 +356,6 @@ public:
                 //if it reached here, means that left is empty.
             }
         }
-
 
         //right boundary
         {

@@ -9,7 +9,6 @@
 #include <vector>
 #include "PointQuery.h"
 #include <iostream>
-#include "surf_implementation.h"
 #include <set>
 #include <map>
 #include <algorithm>
@@ -22,15 +21,188 @@ class RangeFilterTemplate;
 
 vector<string> read_dataset(const string& file_path);
 
+class Dataset: public vector<string>
+{
+private:
+    mutable const vector<string>* prev_dataset  = nullptr;
+    mutable vector<string>::const_iterator prev_iter;
+    static int reads_from_cache;
+    static int total_reads;
+    static int cache_read_attempts;
+public:
+
+    Dataset() {}
+    Dataset(const vector<string>& _dataset): vector<string>(_dataset) {}
+
+    inline bool cached_contains(
+            const vector<string>& dataset,
+            const string& left, const string& right,
+            bool& has_ret,
+            vector<string>::const_iterator& lb,
+            vector<string>::const_iterator& hb,
+            vector<string>::const_iterator& at) const {
+//        if(total_reads == 5310024)
+//        {
+//            cout << "here" << endl;
+//        }
+        if(prev_dataset != nullptr) {
+            cache_read_attempts ++;
+            at = prev_iter;
+            if (at == dataset.end()) {
+                if (left > *dataset.rbegin()) {
+                    has_ret = true;
+                    return false;
+                } else {
+//                    assert(left <= *dataset.rbegin());
+                    assert(at > dataset.begin());
+                    at--;
+                    if (right >= *dataset.rbegin()) {
+                        has_ret = true;
+                        return true;
+                    } else {
+                        hb = dataset.end()-1;
+                    }
+                }
+            } else {
+                int iter = 0;
+                while (iter < 3) {
+                    iter++;
+                    if (left < *at) {
+                        if (*at > right) {
+                            if (at > dataset.begin()) {
+                                at--;
+                                if (left > *at) {
+                                    has_ret = true;
+                                    at++;
+                                    return false;
+                                } else if (left == *at) {
+                                    has_ret = true;
+                                    return true;
+                                } else {
+                                    hb = at + 1;
+                                }
+                            } else {
+                                assert(at == dataset.begin());
+                                has_ret = true;
+                                assert(false);
+                                return false;
+                            }
+                        }
+                        else {
+                            has_ret = true;
+                            return true;
+                        }
+                    } else if (*at < left) {
+                        lb = at+1;
+                        at++;
+                        if(at == dataset.end()) {
+                            break;
+                        }
+                    }
+                    else {
+                        has_ret = true;
+                        return true;
+                    }
+                }
+            }
+        }
+        has_ret = false;
+        return true;
+    }
+
+    bool contains(const string& left, const string& right) const
+    {
+        const vector<string>& dataset = *this;
+        if(dataset.empty()) {
+            return false;
+        }
+
+        auto lb = dataset.begin();
+        auto hb = dataset.end();
+        vector<string>::const_iterator at;
+
+        bool has_ret = false;
+//        bool ret = cached_contains(dataset, left, right, has_ret, lb, hb, at);
+        bool ret = true;
+
+        total_reads+=1;
+
+        if(has_ret) {
+            reads_from_cache += 1;
+
+            prev_dataset = &dataset;
+            prev_iter = at;
+
+            return ret;
+        }
+
+        if(false){
+//        if (reads_from_cache % 500 == 0)
+            cout << reads_from_cache << "/" << cache_read_attempts << "/" << total_reads << " "
+                 << (float) 100 * reads_from_cache / cache_read_attempts << " "
+                 << (float) 100 * cache_read_attempts / total_reads << endl;
+            if (reads_from_cache == 18500 || reads_from_cache == 19000 || reads_from_cache == 19500 ||
+                reads_from_cache == 21000 || reads_from_cache == 21500) {
+                cout << "here" << endl;
+            }
+        }
+
+        auto new_at = lower_bound(lb, hb, left);
+        prev_dataset = &dataset;
+        prev_iter = new_at;
+//        cout << *prev_iter << endl;
+
+        if(new_at == dataset.end()) {
+            if(has_ret) {
+                assert(!ret);
+            }
+            return false;
+        }
+
+//        assert(new_at != hb);
+        if(has_ret) {
+            assert(*new_at == *at);
+            assert(new_at == at);
+        }
+        else {
+            at = new_at;
+        }
+
+
+        if(at == dataset.end())
+        {
+            if(has_ret) {
+                assert(!ret);
+            }
+            return false;
+        }
+        assert(*at >= left);
+        if(right < *at)
+        {
+            if(has_ret) {
+                assert(!ret);
+            }
+            return false;
+        }
+
+        if(has_ret) {
+            assert(ret);
+        }
+        return true;
+    }
+
+    void remove_duplicates();
+};
+
 class DatasetAndWorkloadMetaData
 {
 
 protected:
 
-    string to_binary_string(int x, size_t n)
+    string to_binary_string(size_t x, size_t n) const
     {
         assert(_base == 2);
-        string ret = "";
+        string ret;
         while(x > 0) {
             ret += std::to_string(x % _base);
             x/=_base;
@@ -50,10 +222,10 @@ protected:
         string new_str;
         for(auto c: str)
         {
-            assert(!char_to_binary_string[(int)c].empty());
+            assert(!char_to_binary_string[(size_t)(unsigned char)c].empty());
 //            assert(to_binary_string(char_to_id[c], num_bits_per_char) == char_to_binary_string[(int)c]);
 //            new_str += to_binary_string(char_to_id[c], num_bits_per_char);
-            new_str+=char_to_binary_string[(int)c];
+            new_str+=char_to_binary_string[(size_t)(unsigned char)c];
         }
         return new_str;
     }
@@ -67,7 +239,7 @@ protected:
 
     int max_id = -1;
     int count_num_char[CHAR_SIZE];
-    map<char, int> char_to_id;
+    map<char, size_t> char_to_id;
     vector<char> id_to_char;
     int num_bits = -1;
     size_t _base = 2;
@@ -76,16 +248,19 @@ protected:
 public:
     const DatasetAndWorkloadMetaData& original_meta_data;
 
-    DatasetAndWorkloadMetaData(): original_meta_data(*this) {}
+    DatasetAndWorkloadMetaData(): original_meta_data(*this) {
+        memset(count_num_char, 0, sizeof(count_num_char));
+    }
 
     DatasetAndWorkloadMetaData(const DatasetAndWorkloadMetaData& is_original, bool assert_true): original_meta_data(is_original) {
         assert(assert_true);
         max_length = is_original.max_length;
         min_char = is_original.min_char;
         max_char = is_original.max_char;
-        for(int i = 0;i<CHAR_SIZE;i++)
-        {
+        memset(count_num_char, 0, sizeof(count_num_char));
+        for(int i = 0;i<CHAR_SIZE;i++) {
             char_to_binary_string[i] = is_original.char_to_binary_string[i];
+            count_num_char[i] = is_original.count_num_char[i];
         }
     }
 
@@ -181,7 +356,7 @@ public:
 
 class DatasetAndWorkload: public DatasetAndWorkloadMetaData
 {
-    vector<string> dataset;
+    Dataset dataset;
     vector<pair<string, string> > workload;
 
     bool negative_workload_defined = false;
@@ -237,7 +412,7 @@ class DatasetAndWorkload: public DatasetAndWorkloadMetaData
         set<char> unique_chars = get_unique_chars();
 
         size_t id = 1;
-        char prev = 0;
+        size_t prev = 0;
         for(auto c : unique_chars)
         {
             assert(c != 0);
@@ -295,8 +470,6 @@ public:
     }
 
     DatasetAndWorkload(const string& file_path, const string& workload_difficulty, bool do_translate_to_base) {
-
-        memset(count_num_char, 0, sizeof(count_num_char));
 
         prep_dataset_and_workload(file_path, workload_difficulty);
 
@@ -365,8 +538,6 @@ public:
     DatasetAndWorkload(const vector<string>& _dataset, const vector<pair<string, string> >& _workload):
         dataset(_dataset), workload(_workload){
 
-        memset(count_num_char, 0, sizeof(count_num_char));
-
         for(const auto& it: dataset) {
             process_str(it);
         }
@@ -379,8 +550,6 @@ public:
 
     DatasetAndWorkload(const vector<string>& _dataset, const vector<pair<string, string> >& _workload, const DatasetAndWorkloadMetaData& to_copy_meta_data):
             DatasetAndWorkloadMetaData(to_copy_meta_data.original_meta_data, true), dataset(_dataset), workload(_workload){
-
-        memset(count_num_char, 0, sizeof(count_num_char));
 
         assert(get_unique_chars().size() <= final_base);
     }
@@ -419,9 +588,9 @@ public:
                 string left_key = workload[i].first;
                 string right_key = workload[i].second;
 
-                bool ret = contains(dataset, left_key, right_key);
+                bool ret = dataset.contains(left_key, right_key);
                 if(prev != nullptr) {
-                    bool prev_ret = contains(prev->dataset, prev->workload[i].first, prev->workload[i].second);
+                    bool prev_ret = prev->dataset.contains(prev->workload[i].first, prev->workload[i].second);
                     assert(ret == prev_ret);
                 }
 
