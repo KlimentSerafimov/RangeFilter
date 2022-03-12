@@ -56,9 +56,9 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(const DatasetA
     assert(!track_negative_point_queries);
 
     const vector<string>& dataset = dataset_and_workload.get_dataset();
-    const vector<pair<string, string> >& negative_workload = dataset_and_workload.get_workload();
+    const vector<pair<string, string> >& negative_workload = dataset_and_workload.get_negative_workload_assert_has();
 
-    assert(negative_workload == dataset_and_workload.get_negative_workload_assert_has());
+//    assert(negative_workload == dataset_and_workload.get_negative_workload_assert_has());
 
     track_negative_point_queries = true;
 
@@ -211,12 +211,14 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(const DatasetA
         multi_d_score.push_back(size_ratio);
 
         split_size_vs_density_ratio_frontier.insert(MyString(dataset[row_id]), multi_d_score);
+//        assert(split_size_vs_density_ratio_frontier.is_sorted());
     }
     out.close();
 
     cout << "best based on density ratio: " << best_split.first <<" "<< best_split.second << endl;
 
     split_size_vs_density_ratio_frontier.print(cout, 10, true);
+//    assert(split_size_vs_density_ratio_frontier.is_sorted());
 
     int constraint_relaxation_id = 1;
 
@@ -226,6 +228,8 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(const DatasetA
         vector<double> constraint;
         constraint.push_back(-1 - 0.06*constraint_relaxation_id);
         constraint.push_back(1.0 - 0.4/(1<<constraint_relaxation_id));
+//        constraint.push_back(-1 - 0.06*constraint_relaxation_id);
+//        constraint.push_back(1.0 - 0.02/(1<<constraint_relaxation_id));
 
         auto optimization_function = [](vector<double> in) {
             return - in[0] * in[0] * (1 - in[1]);

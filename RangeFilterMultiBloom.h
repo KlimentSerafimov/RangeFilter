@@ -327,9 +327,9 @@ public:
         }
     }
 
-    MultiBloom* clone() override {
-        return new MultiBloom(this);
-    }
+//    MultiBloom* clone() override {
+//        return new MultiBloom(this);
+//    }
 
     MultiBloom(const vector<string>& dataset, const MultiBloomParams& _params, bool do_print = false):
         PointQueryParams(_params),
@@ -404,7 +404,7 @@ public:
         sizeof(vector<pair<int, double> >) + params.size()*sizeof(pair<int, double>);
     }
 
-    void clear() override
+    void _clear() override
     {
         for(size_t i = 0; i<bfs.size();i++)
         {
@@ -454,7 +454,7 @@ public:
 
     void reinitialize(const RichMultiBloomParams& new_params)
     {
-        clear();
+        _clear();
         set_cleared_to(false);
         RichMultiBloomParams::reinitialize(new_params);
         init();

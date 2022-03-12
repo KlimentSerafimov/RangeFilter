@@ -44,8 +44,9 @@ public:
         return trie->get_memory();
     }
 
-    void clear() override
+    void _clear() override
     {
+        assert(false);
         trie->clear();
     }
 
@@ -61,6 +62,9 @@ class RangeFilterTemplate
 
     int num_negative_point_queries = 0;
 
+    bool has_prev_num_negative_point_queries = false;
+    int prev_num_negative_point_queries = 0;
+
     void calc_metadata(const DatasetAndWorkload& dataset_and_workload, bool do_print);
 
 public:
@@ -73,6 +77,8 @@ private:
     {
         track_negative_point_queries = false;
         prefix_to_negative_point_queries.clear();
+        has_prev_num_negative_point_queries = true;
+        prev_num_negative_point_queries = num_negative_point_queries;
         num_negative_point_queries = 0;
     }
 
@@ -353,7 +359,13 @@ public:
     }
 
     int get_negative_point_queries() {
-        return num_negative_point_queries;
+        if(track_negative_point_queries) {
+            return num_negative_point_queries;
+        }
+        else {
+            assert(has_prev_num_negative_point_queries);
+            return prev_num_negative_point_queries;
+        }
     }
 
     pair<double, string>* analyze_negative_point_query_density_heatmap(const DatasetAndWorkload& dataset_and_workload);

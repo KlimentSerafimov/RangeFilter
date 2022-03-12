@@ -10,6 +10,7 @@ Frontier<RichMultiBloomParams> *
 simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &frontiers, int meta_iter,
                     Frontier<RichMultiBloomParams> *frontier_p)
 {
+    srand(0);
     assert(meta_iter >= 1);
     const vector<string>& dataset = dataset_and_workload.get_dataset();
     double seed_fpr = 0.0001;
@@ -22,10 +23,12 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
     dim_names.emplace_back("bpk");
     dim_names.emplace_back("fpr");
 
+    int mult = 1000;
+
     int measure_frontier_area_every_step = meta_iter*1200;
-    int output_step_count_every = 600;
-    int output_frontier_every = 1200;
-    int hard_copy_every = 2400;
+    int output_step_count_every = 600*mult;
+    int output_frontier_every = 1200*mult;
+    int hard_copy_every = 2400*mult;
 
 
     if(frontier_p == nullptr) {
@@ -91,7 +94,7 @@ simulated_annealing(const DatasetAndWorkload &dataset_and_workload, ofstream &fr
 
     assert(meta_iter >= 1);
     const size_t stagnation_count_cutoff_for_annealing_epoch_transition = 3*meta_iter;
-    const size_t max_reinitialization_count = 0;
+    const size_t max_reinitialization_count = 1;
 
     while(true)
     {

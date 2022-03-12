@@ -19,7 +19,8 @@ protected:
     vector<PointQueryParams*> sub_point_query_params;
     const DatasetAndWorkloadMetaData& meta_data;
 
-    bool invariant() const {
+protected:
+    virtual bool invariant() const {
         if(n == 0) {
             assert(splits.size() == 0);
             assert(sub_point_query_params.size() == 0);
@@ -36,14 +37,14 @@ protected:
     }
 
 public:
-    void clear() override {
+    void clear()
+    {
+        _clear();
+    }
+    void _clear() override {
         assert(!is_cleared());
-        for(auto it: sub_point_query_params)
-        {
-            it->clear();
-        }
-        splits.clear();
         sub_point_query_params.clear();
+        splits.clear();
         set_cleared_to(true);
     }
     explicit HybridPointQueryParams(const DatasetAndWorkloadMetaData& _meta_data);
@@ -59,6 +60,18 @@ class HybridPointQuery: public HybridPointQueryParams, public PointQuery {
 
     vector<PointQuery*> sub_point_query;
 public:
+
+    bool invariant() const override
+    {
+        assert(HybridPointQueryParams::invariant());
+        assert(sub_point_query.size() == sub_point_query_params.size());
+        for(size_t i = 0; i< sub_point_query.size();i++)
+        {
+            assert(sub_point_query[i] == sub_point_query_params[i]);
+        }
+        return true;
+    }
+
     HybridPointQuery(const DatasetAndWorkload& dataset_and_workload, const string& midpoint, int left_cutoff, float left_fpr, int right_cutoff, float right_fpr, bool do_print);
 
     HybridPointQuery(
@@ -75,16 +88,16 @@ public:
         assert(invariant());
     }
 
-    HybridPointQuery* clone() override
-    {
-        assert(n == 2);
-        assert(invariant());
-        return new HybridPointQuery(
-                splits[0],
-                meta_data,
-                sub_point_query[0]->clone(),
-                sub_point_query[1]->clone());
-    }
+//    HybridPointQuery* clone() override
+//    {
+//        assert(n == 2);
+//        assert(invariant());
+//        return new HybridPointQuery(
+//                splits[0],
+//                meta_data,
+//                sub_point_query[0]->clone(),
+//                sub_point_query[1]->clone());
+//    }
 
 
     void populate_params(vector<MultiBloomParams *> &ret_params) override {
@@ -191,8 +204,14 @@ public:
         return ret;
     }
 
-    void clear() override {
-        HybridPointQueryParams::clear();
+    void _clear() override {
+        assert(invariant());
+        HybridPointQueryParams::_clear();
+        for(auto it: sub_point_query)
+        {
+            it->clear();
+        }
+        sub_point_query.clear();
     }
 
     string to_string() const override

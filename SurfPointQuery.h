@@ -9,9 +9,9 @@
 
 class SurfPointQueryParams: public PointQueryParams
 {
-    int trie_size;
 
 protected:
+    int trie_size;
     string to_string() const override
     {
         return std::to_string(trie_size);
@@ -29,15 +29,23 @@ namespace surf
     class SuRF;
 }
 
-class SurfPointQuery: public SurfPointQueryParams, public PointQuery
-{
-    surf::SuRF* surf_real= nullptr;
+class SurfPointQuery: public SurfPointQueryParams, public PointQuery {
+    surf::SuRF *surf_real = nullptr;
+    int surf_id = -1;
+    void init();
 public:
-    SurfPointQuery(const vector<string>& dataset, int _trie_size);
+    SurfPointQuery(const vector<string> &dataset, int _trie_size);
+
+    SurfPointQuery(const SurfPointQuery* to_clone);
+
+//    SurfPointQuery* clone() override {
+//        return new SurfPointQuery(this);
+//    }
+
     bool range_query(const string& left_key, const string& right_key) override;
     void insert(const string& s){} // do nothing since it's using surf_real as range filter.
     unsigned long long get_memory() override;
-    void clear() override;
+    void _clear() override;
     string to_string() const override
     {
         return "trie_size " + SurfPointQueryParams::to_string();

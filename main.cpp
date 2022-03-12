@@ -177,17 +177,12 @@ int main_test_surf(DatasetAndWorkload& dataset_and_workload)
 {
     Frontier<MyInt> frontier(2);
     for(int trie_size = 1; trie_size <= 64; trie_size+=1) {
-        SurfStats surf_ret = test_surf(dataset_and_workload.get_dataset(), dataset_and_workload.get_workload(), trie_size);
 
         SurfPointQuery* surf_pq = new SurfPointQuery(dataset_and_workload.get_dataset(), trie_size);
         RangeFilterTemplate* surf_rf = new RangeFilterTemplate(dataset_and_workload, surf_pq);
         const RangeFilterScore& rez = *dataset_and_workload.test_range_filter(surf_rf);
-        cout << surf_ret.to_string() << endl;
         cout << rez.to_string() << endl;
-        assert(rez.get_num_false_positives() == surf_ret.get_num_false_positives());
-        assert(rez.get_memory() == surf_ret.get_memory());
-
-        frontier.insert(MyInt(trie_size), surf_ret.get_score_as_vector());
+        frontier.insert(MyInt(trie_size), rez.get_score_as_vector());
     }
 
     ofstream surf_out("surf_frontier.out");
@@ -261,15 +256,42 @@ void eval_rf_heatmap(DatasetAndWorkload& dataset_and_workload)
     }
 }
 
+void meta_dataset_construction()
+{
+    string file_folder;
+    string file_name = "1M_dataset.txt";
+    string workload_difficulty = "medium"; //choose from "easy", "medium", "hard", "impossible", hybrid
+
+    string file_path = file_folder + file_name;
+
+    DatasetAndWorkload dataset_and_workload(file_path, workload_difficulty, true);
+    dataset_and_workload.get_negative_workload();
+
+    GroundTruthPointQuery *original_ground_truth_point_query = new GroundTruthPointQuery();
+    RangeFilterTemplate original_ground_truth =
+            RangeFilterTemplate(dataset_and_workload, original_ground_truth_point_query, false);
+
+    original_ground_truth.analyze_negative_point_query_density_heatmap(dataset_and_workload);
+
+    cout << original_ground_truth.get_negative_point_queries()/dataset_and_workload.get_negative_workload_assert_has().size() << endl;
+
+}
+
 int main() {
+
+    srand(0);
 
 //    micro unit tests
 //    eval_trie_vs_rf();
 //    return 0;
 
+//    meta_dataset_construction();
+//
+//    return 0;
+
     string file_folder;
     string file_name = "50k_dataset.txt";
-    string workload_difficulty = "hard"; //choose from "easy", "medium", "hard", "impossible", hybrid
+    string workload_difficulty = "hybrid"; //choose from "easy", "medium", "hard", "impossible", hybrid
     string range_filter_type = "hybrid"; // choose from "heatmap", "trie", "surf", "one_bloom", "multi_bloom", "hybrid"
     string parameter_search_style = "dt_style"; // choose from "no_search", "grid_search", "simulated_annealing", "dt_style"
 
@@ -349,15 +371,32 @@ int main() {
             RangeFilterTemplate ground_truth = RangeFilterTemplate(dataset_and_workload, ground_truth_point_query,
                                                                    false);
 
-            local_dataset_and_workload.get_negative_workload();
-            Frontier<HybridRangeFilterSynthesizer::PointQueryPointer> *ret =
-                    HybridRangeFilterSynthesizer::construct_hybrid_point_query(local_dataset_and_workload, ground_truth, vector<string>(1, "root")).first;
+            string base_case_filter = "surf;one_bloom" ; // choose from "surf;one_bloom", "surf", "multi_bloom", "one_bloom";
 
-            ofstream dt_out("tree_of_hybrid_hard50k_base100_longer__only_multi_bloom.out");
+//            for(size_t base_case_size = 20; base_case_size <= 248;
+//                base_case_size =
+//                        min(
+//                                min(
+//                                        base_case_size*2,
+//                                        base_case_size+dataset_and_workload.get_workload().size()/20),
+//                                dataset_and_workload.get_workload().size())
+//                )
+            int base_case_size = 50; {
 
-            ret->print(dt_out);
+                local_dataset_and_workload.get_negative_workload();
+                Frontier<HybridRangeFilterSynthesizer::PointQueryPointer> *ret =
+                        HybridRangeFilterSynthesizer::construct_hybrid_point_query(
+                                local_dataset_and_workload,
+                                ground_truth, base_case_filter,
+                                base_case_size,
+                                vector<string>(1, "root")).first;
 
-            dt_out.close();
+                ofstream dt_out("tree_of_hybrid_hybrid50k_base" + std::to_string(base_case_size) + "_second__" + base_case_filter + ".out");
+
+                ret->print(dt_out);
+
+                dt_out.close();
+            }
 
             return 0;
         }
@@ -407,7 +446,7 @@ void grid_search(DatasetAndWorkload& dataset_and_workload, const string& _range_
         int _sample_id = 0;
         int samples = 100 ;
         int space = 20*20*24*24;
-        float ratio = (float)samples/space;
+        float ratio = (float)samples/(float)space;
         int samples_taken = 0;
         Frontier<HybridPointQueryParams> frontier(2);
         Frontier<MultiBloomParams> multi_bloom_frontier(2);
@@ -421,7 +460,7 @@ void grid_search(DatasetAndWorkload& dataset_and_workload, const string& _range_
 //                        cout << "ID: " << id++ << endl;
                         _sample_id++;
 //                        cout << left_cutoff << " "<< right_cutoff <<" "<< left_fpr <<" "<< right_fpr << endl;
-                        if(rand()%1000 < ratio*1000)
+                        if(rand()%1000 <= ratio*1000)
                         {
                             cout << "#SAMPLES: " << samples_taken++ << endl;
                         }
@@ -508,7 +547,7 @@ void grid_search(DatasetAndWorkload& dataset_and_workload, const string& _range_
                     frontier.insert(*params, ret.get_score_as_vector());
                 }
                 delete rf;
-                pq->clear();
+                pq->_clear();
                 output_file << ret.to_string() << endl;
                 cout << ret.to_string() << endl;
                 if (ret.false_positive_rate() > 0.5) {

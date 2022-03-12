@@ -14,6 +14,7 @@
 #include <map>
 #include <algorithm>
 #include "fstream"
+#include "Trie.h"
 
 using namespace std;
 
@@ -23,6 +24,8 @@ vector<string> read_dataset(const string& file_path);
 
 class DatasetAndWorkloadMetaData
 {
+
+protected:
 
     string to_binary_string(int x, size_t n)
     {
@@ -41,41 +44,49 @@ class DatasetAndWorkloadMetaData
         return ret;
     }
 
-protected:
 
-    string to_binary_string(string str)
+    string to_binary_string(const string& str)
     {
         string new_str;
         for(auto c: str)
         {
-            new_str += to_binary_string(char_to_id[c], num_bits_per_char);
+            assert(!char_to_binary_string[(int)c].empty());
+//            assert(to_binary_string(char_to_id[c], num_bits_per_char) == char_to_binary_string[(int)c]);
+//            new_str += to_binary_string(char_to_id[c], num_bits_per_char);
+            new_str+=char_to_binary_string[(int)c];
         }
         return new_str;
     }
 
+
+    string char_to_binary_string[CHAR_SIZE];
 
     size_t max_length = 0;
     char min_char = (char)127;
     char max_char = (char)0;
 
     int max_id = -1;
-    set<char> unique_chars;
+    int count_num_char[CHAR_SIZE];
     map<char, int> char_to_id;
     vector<char> id_to_char;
     int num_bits = -1;
     size_t _base = 2;
-    size_t final_base = 64;
-public:
+    const size_t final_base = 64;
     int num_bits_per_char = -1;
+public:
     const DatasetAndWorkloadMetaData& original_meta_data;
 
     DatasetAndWorkloadMetaData(): original_meta_data(*this) {}
 
     DatasetAndWorkloadMetaData(const DatasetAndWorkloadMetaData& is_original, bool assert_true): original_meta_data(is_original) {
+        assert(assert_true);
         max_length = is_original.max_length;
         min_char = is_original.min_char;
         max_char = is_original.max_char;
-        assert(assert_true);
+        for(int i = 0;i<CHAR_SIZE;i++)
+        {
+            char_to_binary_string[i] = is_original.char_to_binary_string[i];
+        }
     }
 
     string to_string_base(const string& str) const
@@ -86,8 +97,9 @@ public:
         int p = 1<<(num_bits-1);
         int bit_id = 0;
 //        cout << "str: " << str << endl;
-        for(auto c: str)
+        for(size_t i = 0;i<str.size();i++)
         {
+            char c = str[i];
             assert(p>=1);
             if(c == '1')
             {
@@ -123,10 +135,11 @@ public:
     {
         assert(!str.empty());
         max_length = max(max_length, str.size());
-        for(auto c : str) {
+        for(size_t i = 0; i<str.size();i++) {
+            char c = str[i];
             min_char = min(min_char, c);
             max_char = max(max_char, c);
-            unique_chars.insert(c);
+            count_num_char[(int)c]+=1;
         }
     }
 
@@ -199,8 +212,18 @@ class DatasetAndWorkload: public DatasetAndWorkloadMetaData
                     to_string_base(workload[i].first),
                     to_string_base(workload[i].second));
         }
+    }
 
 
+    set<char> get_unique_chars() {
+        set<char> ret;
+        for (int i = 0; i < CHAR_SIZE; i++) {
+            if (count_num_char[i] != 0) {
+                assert(count_num_char[i] >= 1);
+                ret.insert((char) i);
+            }
+        }
+        return ret;
     }
 
     void translate_to_binary()
@@ -210,6 +233,8 @@ class DatasetAndWorkload: public DatasetAndWorkloadMetaData
         assert(char_to_id.empty());
 
         id_to_char.push_back(0);
+
+        set<char> unique_chars = get_unique_chars();
 
         size_t id = 1;
         char prev = 0;
@@ -233,6 +258,11 @@ class DatasetAndWorkload: public DatasetAndWorkloadMetaData
         num_bits_per_char--;
 
         cout << "max_id " << max_id <<" "<< num_bits_per_char << endl;
+
+        for(auto c: unique_chars)
+        {
+            char_to_binary_string[(int)c] = to_binary_string(char_to_id[c], num_bits_per_char);
+        }
 
         for(size_t i = 0;i<dataset.size();i++)
         {
@@ -266,6 +296,8 @@ public:
 
     DatasetAndWorkload(const string& file_path, const string& workload_difficulty, bool do_translate_to_base) {
 
+        memset(count_num_char, 0, sizeof(count_num_char));
+
         prep_dataset_and_workload(file_path, workload_difficulty);
 
         for(const auto& it: dataset) {
@@ -278,16 +310,16 @@ public:
 
         if(do_translate_to_base) {
 
-            size_t num_negative_workload = get_negative_workload().size();
+//            size_t num_negative_workload = get_negative_workload().size();
 
-            DatasetAndWorkload original = DatasetAndWorkload(dataset, workload);
+//            DatasetAndWorkload original = DatasetAndWorkload(dataset, workload);
 
             translate_to_binary();
 
             max_length = 0;
             min_char = (char) 127;
             max_char = (char) 0;
-            unique_chars.clear();
+            memset(count_num_char, 0, sizeof(count_num_char));
             negative_workload_defined = false;
             negative_workload.clear();
 
@@ -299,11 +331,11 @@ public:
                 process_str(it.second);
             }
 
-            get_negative_workload(&original);
+//            get_negative_workload(&original);
+//
+//            assert(num_negative_workload == negative_workload.size());
 
-            assert(num_negative_workload == negative_workload.size());
-
-            assert(unique_chars.size() == _base);
+            assert(get_unique_chars().size() == _base);
 
             _base = final_base;
 
@@ -312,7 +344,7 @@ public:
             max_length = 0;
             min_char = (char) 127;
             max_char = (char) 0;
-            unique_chars.clear();
+            memset(count_num_char, 0, sizeof(count_num_char));
             negative_workload_defined = false;
             negative_workload.clear();
 
@@ -324,14 +356,16 @@ public:
                 process_str(it.second);
             }
 
-            get_negative_workload(&original);
-
-            assert(num_negative_workload == negative_workload.size());
+//            get_negative_workload(&original);
+//
+//            assert(num_negative_workload == negative_workload.size());
         }
     }
 
     DatasetAndWorkload(const vector<string>& _dataset, const vector<pair<string, string> >& _workload):
         dataset(_dataset), workload(_workload){
+
+        memset(count_num_char, 0, sizeof(count_num_char));
 
         for(const auto& it: dataset) {
             process_str(it);
@@ -340,13 +374,15 @@ public:
             process_str(it.first);
             process_str(it.second);
         }
-        assert(unique_chars.size() <= final_base);
+        assert(get_unique_chars().size() <= final_base);
     }
 
     DatasetAndWorkload(const vector<string>& _dataset, const vector<pair<string, string> >& _workload, const DatasetAndWorkloadMetaData& to_copy_meta_data):
             DatasetAndWorkloadMetaData(to_copy_meta_data.original_meta_data, true), dataset(_dataset), workload(_workload){
 
-        assert(unique_chars.size() <= final_base);
+        memset(count_num_char, 0, sizeof(count_num_char));
+
+        assert(get_unique_chars().size() <= final_base);
     }
 
     char get_max_char() const {

@@ -82,7 +82,7 @@ public:
     FrontierPoint(ParamsType _params, vector<double> _score): params(_params), score(std::move(_score))
     {}
 
-    bool is_erased() const
+    inline bool is_erased() const
     {
         return is_erased_;
     }
@@ -90,8 +90,8 @@ public:
     void erase()
     {
         assert(!is_erased());
-        is_erased_ = true;
         params.clear();
+        is_erased_ = true;
     }
 
     double operator [](size_t dim_id) const
@@ -198,16 +198,33 @@ class Frontier
         sorted = false;
     }
 
+    bool sorted = false;
+
+    bool has_memoized_area = false;
+    double memorized_area = numeric_limits<double>::max();
+
+    bool has_memoized_line_length = false;
+    LineLength* memoized_line_length = nullptr;
+
 public:
 
     bool changed = false;
 
     explicit Frontier(size_t _num_objectives): num_objectives(_num_objectives){}
 
-    bool sorted = false;
+    bool is_sorted()
+    {
+        for(size_t i = 1; i<frontier.size();i++) {
+            assert((*frontier[i-1]) < (*frontier[i]));
+        }
+        return true;
+    }
 
     void sort()
     {
+//        assert(is_sorted());
+        _remove_erased();
+        return ;
         if(sorted) {
             return;
         }
@@ -217,31 +234,77 @@ public:
                 {
                     return (*lhs) < (*rhs);
                 });
+        assert(is_sorted());
         sorted = true;
     }
+
+    void explicit_insert(FrontierPoint<ParamsType>* new_point)
+    {
+        if(frontier.size() == 0)
+        {
+            frontier.push_back(new_point);
+        }
+        else {
+            int lb = 0;
+            int hb = frontier.size() - 1;
+            int target = 0;
+            while (lb <= hb) {
+                int mid = (lb + hb) / 2;
+                if (*frontier[mid] < *new_point) {
+                    lb = mid + 1;
+                    target = lb;
+                } else if (*new_point < *frontier[mid]) {
+                    hb = mid - 1;
+                } else {
+                    assert(frontier[mid]->is_erased());
+                    target = mid;
+                    break;
+                }
+            }
+
+            assert(target >= 0);
+            if((size_t)target >= frontier.size())
+            {
+                assert((size_t)target == frontier.size());
+                frontier.push_back(new_point);
+            }
+            else {
+                if (frontier[target]->is_erased()) {
+                    frontier[target] = new_point;
+                } else {
+                    frontier.insert(frontier.begin() + target, new_point);
+                }
+            }
+        }
+//        sort();
+//        assert(is_sorted());
+    }
+
 
     void print(ostream& out, int print_top = -1, bool decorate = false)
     {
         sort();
-        reverse(frontier.begin(), frontier.end());
-        sorted = false;
+        _print(frontier, out, print_top, decorate);
+    }
+    static void _print(const vector<FrontierPoint<ParamsType>* >& frontier, ostream& out, int print_top = -1, bool decorate = false)
+    {
+        auto reversed_frontier = frontier;
+        reverse(reversed_frontier.begin(), reversed_frontier.end());
         int init_print = 0;
 
         if(decorate)
         out << "frontier (";
 
-        if(print_top != -1)
-        {
-            init_print = max(0, (int)frontier.size()-print_top);
-
+        if(print_top != -1) {
+            init_print = max(0, (int)reversed_frontier.size()-print_top);
         }
 
         if(decorate)
-        out << "top " << frontier.size() - init_print << "/" << frontier.size() << ")" <<  endl;
+        out << "top " << reversed_frontier.size() - init_print << "/" << reversed_frontier.size() << ")" <<  endl;
 
-        for(size_t i = init_print; i<frontier.size();i++)
+        for(size_t i = init_print; i<reversed_frontier.size();i++)
         {
-            out << frontier[i]->to_string() << " PARAMS " << frontier[i]->get_params().to_string() << endl;
+            out << reversed_frontier[i]->to_string() << " PARAMS " << reversed_frontier[i]->get_params().to_string() << endl;
         }
 
         if(decorate)
@@ -314,6 +377,11 @@ public:
 */
         if(!new_point_is_dominated)
         {
+            changed = true;
+            sorted = false;
+            has_memoized_area = false;
+            has_memoized_line_length = false;
+
             for(FrontierPoint<ParamsType>* point: frontier) {
                 if(point->is_erased()) {
                     continue;
@@ -331,16 +399,14 @@ public:
                     num_erased+=1;
                 }
             }
+
             FrontierPoint<ParamsType>* new_point = new FrontierPoint<ParamsType>(params, score);
-            frontier.push_back(new_point);
+            explicit_insert(new_point);
 
             if(num_erased*2 >= frontier.size())
             {
                 _remove_erased();
             }
-
-            changed = true;
-            sorted = false;
 
 
             if(is_same<ParamsType, RichMultiBloomParams>::value) {
@@ -442,8 +508,12 @@ public:
         }
     }
 
-    long double get_area()
+    double get_area()
     {
+        if(has_memoized_area) {
+            return memorized_area;
+        }
+
         assert(num_objectives == 2);
         if(frontier.empty())
         {
@@ -463,11 +533,18 @@ public:
                 left = frontier[i]->get_score_as_vector()[0];
             }
         }
+
+
+        has_memoized_area = true;
+        memorized_area = ret;
         return ret;
     }
 
     LineLength get_line_length()
     {
+        if(has_memoized_line_length) {
+            return *memoized_line_length;
+        }
         assert(num_objectives == 2);
         if(frontier.empty()) {
             return LineLength(-numeric_limits<double>::max(), -numeric_limits<double>::max());
@@ -483,7 +560,10 @@ public:
             assert(y >= 0);
         }
 
-        return LineLength(-x, -y);
+        memoized_line_length = new LineLength(-x, -y);
+        has_memoized_line_length = true;
+
+        return *memoized_line_length;
 
 //        if(x >= 0 && y >= 0)
 //        {

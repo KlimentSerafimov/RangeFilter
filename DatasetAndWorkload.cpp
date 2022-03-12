@@ -123,8 +123,7 @@ void DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, cons
 
 
     for (size_t i = 0; i < workload_seed_and_dataset.size(); i++) {
-        if (i < workload_seed_and_dataset.size() / 2
-//        && workload_difficulty != "impossible"
+        if (i < workload_seed_and_dataset.size() / 2 && workload_difficulty != "impossible"
         ) {
             workload_seed.push_back(workload_seed_and_dataset[i]);
         } else {
@@ -152,6 +151,8 @@ void DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, cons
 
     if(workload_difficulty == "hybrid")
     {
+//        midpoint1 = dataset[2*dataset.size()/5];
+//        midpoint2 = dataset[4*dataset.size()/5];
         midpoint1 = dataset[dataset.size()/3];
         midpoint2 = dataset[2*dataset.size()/3];
         cout << "midpoint1: " << midpoint1 << endl;
@@ -162,24 +163,18 @@ void DatasetAndWorkload::prep_dataset_and_workload(const string& file_path, cons
         for (size_t i = 0; i < workload_seed.size() - 1; i++) {
             string local_workload_difficulty = workload_difficulty;
 
-            if(local_workload_difficulty == "hybrid")
-            {
-                if(workload_seed[i] < midpoint1)
-                {
+            if(local_workload_difficulty == "hybrid") {
+                if (workload_seed[i] < midpoint1) {
                     local_workload_difficulty = "hard";
-                }
-                else if(workload_seed[i] < midpoint2)
-                {
+                } else if (workload_seed[i] < midpoint2) {
                     local_workload_difficulty = "easy";
-                }
-                else
-                {
+                } else {
                     local_workload_difficulty = "hard";
                 }
             }
 
             if (local_workload_difficulty == "easy") {
-                //eeasy workload
+                //easy workload
                 string left_key = workload_seed[i];
                 string right_key = left_key;
                 right_key[(int) right_key.size() - 1] += (char) 1;

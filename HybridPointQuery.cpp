@@ -36,11 +36,9 @@ string HybridPointQueryParams::to_string() const
 }
 
 HybridPointQueryParams::HybridPointQueryParams(const DatasetAndWorkloadMetaData &_meta_data) : PointQueryParams(), meta_data(_meta_data) {
-    assert(meta_data.num_bits_per_char == 6 || meta_data.num_bits_per_char == -1);
 }
 
 HybridPointQueryParams::HybridPointQueryParams(const HybridPointQueryParams &to_copy) : n(to_copy.n), splits(to_copy.splits), meta_data(to_copy.meta_data) {
-    assert(meta_data.num_bits_per_char == 6 || meta_data.num_bits_per_char == -1);
     for(size_t i = 0;i<sub_point_query_params.size();i++)
     {
         sub_point_query_params.push_back(sub_point_query_params[i]->clone_params());

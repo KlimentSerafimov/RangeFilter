@@ -27,6 +27,9 @@ public:
     {
         return "seed_fpr\t" + std::to_string(seed_fpr) + "\tcutoff\t" + std::to_string(cutoff);
     }
+    void _clear() override {
+        set_cleared_to(true);
+    }
 };
 
 class OneBloom: public OneBloomParams, public PointQuery
@@ -108,10 +111,10 @@ public:
         return bf.get_memory() + sizeof(long long) + sizeof(double) + sizeof(int);
     }
 
-    void clear() override
+    void _clear() override
     {
         bf.clear_memory();
-        OneBloomParams::clear();
+        OneBloomParams::_clear();
         assert(is_cleared());
     }
 };

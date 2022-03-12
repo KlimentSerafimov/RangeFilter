@@ -59,13 +59,13 @@ private:
 
         for(int trie_size = 0;trie_size<=64;trie_size++) {
             id_++;
-            const vector<string>& dataset = dataset_and_workload.get_dataset();
-            const vector<pair<string, string> >& workload = dataset_and_workload.get_workload();
-            SurfPointQuery *surf_pq = new SurfPointQuery(dataset, trie_size);
+            SurfPointQuery *surf_pq = new SurfPointQuery(dataset_and_workload.get_dataset(), trie_size);
             RangeFilterTemplate *surf_rf = new RangeFilterTemplate(dataset_and_workload, surf_pq);
 
-            test_surf(dataset, workload, trie_size);
-
+//            if(id_ == 230536)
+//            {
+//                dataset_and_workload.print(cout);
+//            }
             const RangeFilterScore& rez = *dataset_and_workload.test_range_filter(surf_rf);
 
             if(rez.get_num_false_negatives() == 0) {
@@ -115,19 +115,53 @@ private:
 
     static Frontier<PointQueryPointer>* optimize_base_case(
             const DatasetAndWorkload& dataset_and_workload,
+            const string& base_case,
             const vector<MultiBloomParams*>* init_frontier = nullptr) {
-        Frontier<PointQueryPointer>* ret = nullptr;
 
-        ret = optimize_base_case_with_multi_bloom(dataset_and_workload, init_frontier);
+        if(base_case == "multi_bloom") {
+            Frontier<PointQueryPointer> *ret = nullptr;
 
-        for(auto it: ret->get_frontier()){
-            assert(it->get_params().get_pq()->get_is_score_set());
+            ret = optimize_base_case_with_multi_bloom(dataset_and_workload, init_frontier);
+
+            for (auto it: ret->get_frontier()) {
+                assert(it->get_params().get_pq()->get_is_score_set());
+            }
+
+            return ret;
+        }
+        else if(base_case == "surf") {
+            return optimize_base_case_with_surf(dataset_and_workload);
+        }
+        else if(base_case == "one_bloom"){
+            return optimize_base_case_with_one_bloom(dataset_and_workload);
+        }
+        else if(base_case == "surf;one_bloom")
+        {
+            auto ret = optimize_base_case_with_surf(dataset_and_workload);
+            auto one_bloom_ret = optimize_base_case_with_one_bloom(dataset_and_workload);
+
+            for(auto it: one_bloom_ret->get_frontier()) {
+                ret->insert(it->get_params(), it->get_score_as_vector());
+            }
+
+            return ret;
+        }
+        else if(base_case == "surf;multi_bloom")
+        {
+            auto ret = optimize_base_case_with_surf(dataset_and_workload);
+            auto one_bloom_ret = optimize_base_case_with_multi_bloom(dataset_and_workload);
+
+            for(auto it: one_bloom_ret->get_frontier()) {
+                ret->insert(it->get_params(), it->get_score_as_vector());
+            }
+
+            return ret;
         }
 
-        return ret;
-
-//        return optimize_base_case_with_surf(dataset_and_workload);
-//        return optimize_base_case_with_one_bloom(dataset_and_workload);
+        else
+        {
+            assert(false);
+        }
     }
 
 public:
@@ -302,11 +336,18 @@ public:
     }
 
     static pair<Frontier<PointQueryPointer>*, Frontier<PointQueryPointer>*>  construct_hybrid_point_query(
-            const DatasetAndWorkload& dataset_and_workload, RangeFilterTemplate& ground_truth, vector<string> path)
+            const DatasetAndWorkload& dataset_and_workload, RangeFilterTemplate& ground_truth, string base_case_filter, const int _base_case_size, vector<string> path)
     {
-        size_t base_case_min_size = 100;
+        const size_t base_case_min_size = _base_case_size;
 
         assert(!dataset_and_workload.get_workload().empty());
+
+        bool d1 = false;
+        if(d1 || dataset_and_workload.get_workload().size() < base_case_min_size){
+            Frontier<PointQueryPointer> *base_case_frontier = optimize_base_case(dataset_and_workload, base_case_filter);
+            return make_pair(base_case_frontier, base_case_frontier);
+        }
+
 
         assert(dataset_and_workload.get_workload().size() >= base_case_min_size);
 
@@ -321,7 +362,7 @@ public:
 
         if(dataset_and_workload.get_dataset().empty())
         {
-            Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload);
+            Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload, base_case_filter);
             return make_pair(base_case_frontier, base_case_frontier);
         }
 
@@ -338,7 +379,7 @@ public:
         {
             //no need to split;
             //return base case;
-            Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload);
+            Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload, base_case_filter);
             return make_pair(base_case_frontier, base_case_frontier);
         }
 
@@ -370,7 +411,7 @@ public:
 
         if(left_workload.size() < base_case_min_size || right_workload.size() < base_case_min_size)
         {
-            Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload);
+            Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload, base_case_filter);
             return make_pair(base_case_frontier, base_case_frontier);
         }
 
@@ -399,14 +440,14 @@ public:
         DatasetAndWorkload left_dataset_and_workload(left_dataset, left_workload, dataset_and_workload);
         path.push_back("L");
         left_dataset_and_workload.get_negative_workload();
-        pair<Frontier<PointQueryPointer>*, Frontier<PointQueryPointer>*> _left_frontier = construct_hybrid_point_query(left_dataset_and_workload, ground_truth, path);
+        pair<Frontier<PointQueryPointer>*, Frontier<PointQueryPointer>*> _left_frontier = construct_hybrid_point_query(left_dataset_and_workload, ground_truth, base_case_filter, _base_case_size, path);
         Frontier<PointQueryPointer>* left_frontier = _left_frontier.first;
         path.pop_back();
 
         path.push_back("R");
         DatasetAndWorkload right_dataset_and_workload(right_dataset, right_workload, dataset_and_workload);
         right_dataset_and_workload.get_negative_workload();
-        pair<Frontier<PointQueryPointer>*, Frontier<PointQueryPointer>*> _right_frontier = construct_hybrid_point_query(right_dataset_and_workload, ground_truth, path);
+        pair<Frontier<PointQueryPointer>*, Frontier<PointQueryPointer>*> _right_frontier = construct_hybrid_point_query(right_dataset_and_workload, ground_truth, base_case_filter, _base_case_size, path);
         Frontier<PointQueryPointer>* right_frontier = _right_frontier.first;
         path.pop_back();
 
@@ -422,7 +463,7 @@ public:
 
         int _sample_id = 0;
         size_t space = left_frontier->get_size() * right_frontier->get_size() ;
-        int samples = 100000;
+        int samples = space;
         float ratio = (float)samples/space;
         int samples_taken = 0;
 
@@ -431,7 +472,7 @@ public:
             for(const FrontierPoint<PointQueryPointer>* right_pq: right_frontier->get_frontier())
             {
                 _sample_id++;
-                if(rand()%1000 < ratio*1000){
+                if(rand()%1000 <= ratio*1000){
                     samples_taken++;
                 }
                 else {
@@ -487,10 +528,12 @@ public:
 
                 if(ret->insert(PointQueryPointer(pq), rez2.get_score_as_vector()) != nullptr)
                 {
+                    left_pq->get_params().get_pq()->increment_num_shared_ptr();
+                    right_pq->get_params().get_pq()->increment_num_shared_ptr();
                     pq->set_split(
                             best_split,
-                            left_pq->get_params().get_pq()->clone(),
-                            right_pq->get_params().get_pq()->clone());
+                            left_pq->get_params().get_pq(),
+                            right_pq->get_params().get_pq());
                     assert(pq->get_memory()*8 == rez2.get_memory());
                 }
             }
@@ -502,14 +545,16 @@ public:
 
         vector<MultiBloomParams*> init_params;
 
-        for(auto it: _left_frontier.second->get_frontier()) {
-            it->get_params().get_pq()->populate_params(init_params);
-        }
-        for(auto it: _right_frontier.second->get_frontier()) {
-            it->get_params().get_pq()->populate_params(init_params);
+        if(base_case_filter == "multi_bloom") {
+            for (auto it: _left_frontier.second->get_frontier()) {
+                it->get_params().get_pq()->populate_params(init_params);
+            }
+            for (auto it: _right_frontier.second->get_frontier()) {
+                it->get_params().get_pq()->populate_params(init_params);
+            }
         }
 
-        Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload, &init_params);
+        Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload, base_case_filter, &init_params);
 
         for(auto it: base_case_frontier->get_frontier()) {
             ret->insert(it->get_params(), it->get_score_as_vector());
