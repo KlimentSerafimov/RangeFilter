@@ -87,8 +87,11 @@ private:
         float ratio = (float)samples/space;
         int samples_taken = 0;
 
-        for(int cutoff = 1; cutoff < (int)dataset_and_workload.get_max_length(); cutoff++) {
-            for(float fpr = 0.000001; fpr < 1; fpr = min(fpr+0.05, fpr*1.5)) {
+//        for(int cutoff = 1; cutoff < (int)dataset_and_workload.get_max_length(); cutoff++)
+        assert(dataset_and_workload._workload_difficulty == "impossible");
+        int cutoff = dataset_and_workload._impossible_depth;
+        {
+            for(float fpr = 0.0000001; fpr < 1; fpr = min(fpr+0.01/10, fpr*1.12)) {
                 _sample_id++;
                 if(rand()%1000 <= ratio*1000){
                     samples_taken++;
@@ -96,19 +99,20 @@ private:
                 else {
                     continue;
                 }
-                //            cout << "evaluating (sample " << samples_taken << ", _sample_id " << _sample_id << "): " << cutoff <<" " << fpr << endl;
                 OneBloom *pq = new OneBloom(dataset_and_workload.get_dataset(), fpr, cutoff);
+//                cout << "evaluating #id " << samples_taken << "\tPARAMS\t" << pq->to_string() << endl;
                 const RangeFilterScore& rez = *dataset_and_workload.eval_point_query(pq);
                 ret->insert(PointQueryPointer(pq), rez.get_score_as_vector());
             }
         }
 
-
-        cout << "TOTAL IDS: " << _sample_id << " TOTAL SAMPLES: " << samples_taken << endl;
-
-        ret->print(cout, 10, true);
-
-        cout << "DONE optimize_base_case" << endl << endl;
+//        cout << "TOTAL IDS: " << _sample_id << " TOTAL SAMPLES: " << samples_taken << endl;
+//
+//        ret->print(cout, 10, true);
+//
+        cout << "TOTAL_ONE_BLOOM_PARAM_SAMPLES " << samples_taken << endl;
+        cout << "FRONTIER_SIZE " << ret->get_size() << endl;
+        cout << "DONE optimize_base_case_one_bloom" << endl << endl;
 
         return ret;
     }
@@ -336,14 +340,13 @@ public:
     }
 
     static pair<Frontier<PointQueryPointer>*, Frontier<PointQueryPointer>*>  construct_hybrid_point_query(
-            const DatasetAndWorkload& dataset_and_workload, RangeFilterTemplate& ground_truth, string base_case_filter, const int _base_case_size, vector<string> path)
+            const DatasetAndWorkload& dataset_and_workload, const RangeFilterTemplate& ground_truth, string base_case_filter, const int _base_case_size, vector<string> path)
     {
         const size_t base_case_min_size = _base_case_size;
 
         assert(!dataset_and_workload.get_workload().empty());
 
-        bool d1 = false;
-        if(d1 || dataset_and_workload.get_workload().size() < base_case_min_size){
+        if(dataset_and_workload.get_workload().size() <= base_case_min_size){
             Frontier<PointQueryPointer> *base_case_frontier = optimize_base_case(dataset_and_workload, base_case_filter);
             return make_pair(base_case_frontier, base_case_frontier);
         }
@@ -409,7 +412,7 @@ public:
             }
         }
 
-        if(left_workload.size() < base_case_min_size || right_workload.size() < base_case_min_size)
+        if(left_workload.size() <= base_case_min_size || right_workload.size() <= base_case_min_size)
         {
             Frontier<PointQueryPointer>* base_case_frontier = optimize_base_case(dataset_and_workload, base_case_filter);
             return make_pair(base_case_frontier, base_case_frontier);

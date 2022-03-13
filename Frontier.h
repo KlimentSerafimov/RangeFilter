@@ -47,7 +47,7 @@ public:
     string to_string()
     {
         std::ostringstream streamObj;
-        streamObj << setprecision(8) <<  first <<" "<< second;
+        streamObj << setprecision(9) <<  first <<" "<< second;
         std::string strObj = streamObj.str();
         return strObj;
     }
@@ -120,15 +120,16 @@ public:
         return ret;
     }
 
-    string to_string() const
+    string score_to_string() const
     {
         assert(!is_erased());
         string ret;
+        std::stringstream ss;
         for(size_t i = 0;i<score.size();i++)
         {
-            ret+=std::to_string(score[i])+" ";
+            ss << fixed << setprecision(9) << std::to_string(score[i])+" ";
         }
-        return ret;
+        return ss.str();
     }
 
     bool operator < (const FrontierPoint<ParamsType>& other) const
@@ -207,6 +208,15 @@ class Frontier
     LineLength* memoized_line_length = nullptr;
 
 public:
+
+    void clear()
+    {
+        for(auto it: frontier)
+        {
+            it->erase();
+        }
+        frontier.clear();
+    }
 
     bool changed = false;
 
@@ -304,7 +314,7 @@ public:
 
         for(size_t i = init_print; i<reversed_frontier.size();i++)
         {
-            out << reversed_frontier[i]->to_string() << " PARAMS " << reversed_frontier[i]->get_params().to_string() << endl;
+            out << reversed_frontier[i]->score_to_string() << " PARAMS " << reversed_frontier[i]->get_params().to_string() << endl;
         }
 
         if(decorate)
@@ -435,8 +445,7 @@ public:
                 ret += 1
         return ret
 */
-    size_t get_size() const
-    {
+    size_t get_size() const {
         return frontier.size()-num_erased;
     }
 

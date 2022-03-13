@@ -51,11 +51,6 @@ public:
 
     void set_cleared_to(bool set_to)
     {
-//        if(pqp_id == 1580)
-//        {
-//            cout << "here " << modify_cleared_id << endl;
-//            cout << endl;
-//        }
         if(modify_cleared_id == -1) {
             modify_cleared_id = 0;
         }
@@ -231,10 +226,6 @@ public:
 
     void decrement_shared_ptr()
     {
-        if(pqp_id == 270)
-        {
-            cout << "here" << endl;
-        }
         assert(num_shared_ptr >= 1);
         num_shared_ptr--;
         if(num_shared_ptr == 0)

@@ -14,123 +14,123 @@
 #include "DatasetAndWorkload.h"
 
 using namespace std;
-
-void eval_trie_vs_rf()
-{
-    Dataset dataset;
-    dataset.emplace_back("aaabbb");
-    dataset.emplace_back("aaaqqq");
-    dataset.emplace_back("aaazzz");
-    dataset.emplace_back("aaaff");
-    dataset.emplace_back("ccc");
-
-    sort(dataset.begin(), dataset.end());
-
-
-    Trie trie(dataset);
-
-    vector<pair<int, double> > vec;
-    vec.reserve(8);
-    for(int i = 0; i<8; i++)
-    {
-        vec.emplace_back(20, 0.0001);
-    }
-
-
-    vector<pair<string, string> > workload;
-    workload.emplace_back(make_pair("aaaqqr", "aaaqqz"));
-    workload.emplace_back(make_pair("aaaa", "aaab"));
-    workload.emplace_back(make_pair("aaaa", "aaac"));
-    workload.emplace_back(make_pair("aaabbb", "aaabbb"));
-    workload.emplace_back(make_pair("aaabbc", "aaaqqp"));
-    workload.emplace_back(make_pair("aaaqqp", "aaaqqq"));
-    workload.emplace_back(make_pair("aaaqqq", "aaaqqq"));
-    workload.emplace_back(make_pair("aaaqqq", "aaaqqr"));
-    workload.emplace_back(make_pair("aaaqqp", "aaaqqr"));
-    workload.emplace_back(make_pair("aaaqqr", "aaaqqy"));
-    workload.emplace_back(make_pair("aaaqqr", "aaazzz"));
-    workload.emplace_back(make_pair("aaaqqr", "aaazzy"));
-    workload.emplace_back(make_pair("aaaqqr", "aaazyz"));
-    workload.emplace_back(make_pair("aaaqqr", "aaayzz"));
-    workload.emplace_back(make_pair("aaaqqr", "aaayzz"));
-    workload.emplace_back(make_pair("aa", "ab"));
-    workload.emplace_back(make_pair("a", "aaabba"));
-    workload.emplace_back(make_pair("a", "aaabbb"));
-    workload.emplace_back(make_pair("a", "aaazzz"));
-    workload.emplace_back(make_pair("aaazzz", "aaazzz"));
-    workload.emplace_back(make_pair("aaabbc", "aaabbc"));
-    workload.emplace_back(make_pair("aaaab", "aaaz"));
-    workload.emplace_back(make_pair("aaac", "aaaz"));
-    workload.emplace_back(make_pair("aac", "aacz"));
-    workload.emplace_back(make_pair("aaabbba", "aaaqqp"));
-    workload.emplace_back(make_pair("aaaqqp", "aaaqqqa"));
-    workload.emplace_back(make_pair("aaaff", "aaaff"));
-    workload.emplace_back(make_pair("cbb", "ddd"));
-    workload.emplace_back(make_pair("bbb", "cdd"));
-
-    bool do_print = false;
-
-//    auto* multi_bloom = new MultiBloom(dataset, 0.0001, -1, do_print);
-//    RangeFilterTemplate* rf = new RangeFilterTemplate(dataset_and_workload, multi_bloom, do_print);
-
-//    auto* pq = new HybridPointQuery(dataset, "aaazzz", -1, 0.001, -1, 0.001, do_print);
-//    auto *rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
-
-    DatasetAndWorkload dataset_and_workload(dataset, workload);
-
-    PointQuery *ground_truth_point_query = new GroundTruthPointQuery();
-    RangeFilterTemplate* rf = new RangeFilterTemplate(dataset_and_workload, ground_truth_point_query, do_print);
-
-    vector<pair<string, string> > negative_workload;
-
-    for(size_t i = 0;i<workload.size();i++) {
-        string left_key = workload[i].first;
-        string right_key = workload[i].second;
-
-        bool ret = rf->query(left_key, right_key);
-        assert(dataset.contains(left_key, right_key) == ret);
-
-        if (!ret) {
-            negative_workload.push_back(workload[i]);
-        }
-    }
-
-    cout << "|negative_workload| = " << negative_workload.size() << endl;
-
-    DatasetAndWorkload local_dataset_and_workload(dataset_and_workload.get_dataset(), dataset_and_workload.get_negative_workload());
-
-    string best_split = rf->analyze_negative_point_query_density_heatmap(local_dataset_and_workload)->second;
-
-
-    cout << "start eval" << endl;
-    for(const auto& q: workload)
-    {
-        cout << q.first <<" "<< q.second << endl;
-        bool trie_out = trie.query(q.first, q.second);
-        bool rf_out = rf->query(q.first, q.second);
-        cout <<trie_out <<" "<< rf_out << endl;
-        if(trie_out == rf_out)
-        {
-            cout << "OK" << endl;
-        }
-        else
-        {
-//            cout << "WRONG" << endl;
-            if(trie_out)
-            {
-                cout << "FALSE NEGATIVE" << endl;
-            }
-            else
-            {
-                cout << "FALSE POSITIVE" << endl;
-            }
-            assert(false);
-        }
-    }
-
-    cout << "done" << endl;
-
-}
+//
+//void eval_trie_vs_rf()
+//{
+//    Dataset dataset;
+//    dataset.emplace_back("aaabbb");
+//    dataset.emplace_back("aaaqqq");
+//    dataset.emplace_back("aaazzz");
+//    dataset.emplace_back("aaaff");
+//    dataset.emplace_back("ccc");
+//
+//    sort(dataset.begin(), dataset.end());
+//
+//
+//    Trie trie(dataset);
+//
+//    vector<pair<int, double> > vec;
+//    vec.reserve(8);
+//    for(int i = 0; i<8; i++)
+//    {
+//        vec.emplace_back(20, 0.0001);
+//    }
+//
+//
+//    vector<pair<string, string> > workload;
+//    workload.emplace_back(make_pair("aaaqqr", "aaaqqz"));
+//    workload.emplace_back(make_pair("aaaa", "aaab"));
+//    workload.emplace_back(make_pair("aaaa", "aaac"));
+//    workload.emplace_back(make_pair("aaabbb", "aaabbb"));
+//    workload.emplace_back(make_pair("aaabbc", "aaaqqp"));
+//    workload.emplace_back(make_pair("aaaqqp", "aaaqqq"));
+//    workload.emplace_back(make_pair("aaaqqq", "aaaqqq"));
+//    workload.emplace_back(make_pair("aaaqqq", "aaaqqr"));
+//    workload.emplace_back(make_pair("aaaqqp", "aaaqqr"));
+//    workload.emplace_back(make_pair("aaaqqr", "aaaqqy"));
+//    workload.emplace_back(make_pair("aaaqqr", "aaazzz"));
+//    workload.emplace_back(make_pair("aaaqqr", "aaazzy"));
+//    workload.emplace_back(make_pair("aaaqqr", "aaazyz"));
+//    workload.emplace_back(make_pair("aaaqqr", "aaayzz"));
+//    workload.emplace_back(make_pair("aaaqqr", "aaayzz"));
+//    workload.emplace_back(make_pair("aa", "ab"));
+//    workload.emplace_back(make_pair("a", "aaabba"));
+//    workload.emplace_back(make_pair("a", "aaabbb"));
+//    workload.emplace_back(make_pair("a", "aaazzz"));
+//    workload.emplace_back(make_pair("aaazzz", "aaazzz"));
+//    workload.emplace_back(make_pair("aaabbc", "aaabbc"));
+//    workload.emplace_back(make_pair("aaaab", "aaaz"));
+//    workload.emplace_back(make_pair("aaac", "aaaz"));
+//    workload.emplace_back(make_pair("aac", "aacz"));
+//    workload.emplace_back(make_pair("aaabbba", "aaaqqp"));
+//    workload.emplace_back(make_pair("aaaqqp", "aaaqqqa"));
+//    workload.emplace_back(make_pair("aaaff", "aaaff"));
+//    workload.emplace_back(make_pair("cbb", "ddd"));
+//    workload.emplace_back(make_pair("bbb", "cdd"));
+//
+//    bool do_print = false;
+//
+////    auto* multi_bloom = new MultiBloom(dataset, 0.0001, -1, do_print);
+////    RangeFilterTemplate* rf = new RangeFilterTemplate(dataset_and_workload, multi_bloom, do_print);
+//
+////    auto* pq = new HybridPointQuery(dataset, "aaazzz", -1, 0.001, -1, 0.001, do_print);
+////    auto *rf = new RangeFilterTemplate(dataset_and_workload, pq, do_print);
+//
+//    DatasetAndWorkload dataset_and_workload(dataset, workload);
+//
+//    PointQuery *ground_truth_point_query = new GroundTruthPointQuery();
+//    RangeFilterTemplate* rf = new RangeFilterTemplate(dataset_and_workload, ground_truth_point_query, do_print);
+//
+//    vector<pair<string, string> > negative_workload;
+//
+//    for(size_t i = 0;i<workload.size();i++) {
+//        string left_key = workload[i].first;
+//        string right_key = workload[i].second;
+//
+//        bool ret = rf->query(left_key, right_key);
+//        assert(dataset.contains(left_key, right_key) == ret);
+//
+//        if (!ret) {
+//            negative_workload.push_back(workload[i]);
+//        }
+//    }
+//
+//    cout << "|negative_workload| = " << negative_workload.size() << endl;
+//
+//    DatasetAndWorkload local_dataset_and_workload(dataset_and_workload.get_dataset(), dataset_and_workload.get_negative_workload());
+//
+//    string best_split = rf->analyze_negative_point_query_density_heatmap(local_dataset_and_workload)->second;
+//
+//
+//    cout << "start eval" << endl;
+//    for(const auto& q: workload)
+//    {
+//        cout << q.first <<" "<< q.second << endl;
+//        bool trie_out = trie.query(q.first, q.second);
+//        bool rf_out = rf->query(q.first, q.second);
+//        cout <<trie_out <<" "<< rf_out << endl;
+//        if(trie_out == rf_out)
+//        {
+//            cout << "OK" << endl;
+//        }
+//        else
+//        {
+////            cout << "WRONG" << endl;
+//            if(trie_out)
+//            {
+//                cout << "FALSE NEGATIVE" << endl;
+//            }
+//            else
+//            {
+//                cout << "FALSE POSITIVE" << endl;
+//            }
+//            assert(false);
+//        }
+//    }
+//
+//    cout << "done" << endl;
+//
+//}
 
 void extract_dataset(const string& file_path, const string& dest_path, int num_keys)
 {
@@ -195,93 +195,192 @@ int main_test_surf(DatasetAndWorkload& dataset_and_workload)
 void grid_search(DatasetAndWorkload& dataset_and_workload, const string& range_filter_type, ofstream& output_file);
 
 #include <queue>
-
-void eval_rf_heatmap(DatasetAndWorkload& dataset_and_workload)
-{
-    PointQuery *ground_truth_point_query = new GroundTruthPointQuery();
-    RangeFilterTemplate ground_truth = RangeFilterTemplate(dataset_and_workload, ground_truth_point_query, false);
-
-    priority_queue<pair<size_t, vector<pair<string, string> > > > workloads;
-
-    vector<pair<string, string> > negative_workload = dataset_and_workload.get_negative_workload();
-
-    workloads.push(make_pair(negative_workload.size(), negative_workload));
-
-    while(!workloads.empty()) {
-        size_t sz = workloads.top().first;
-        assert(sz >= 2);
-        cout << "SZ: " << sz << endl;
-        vector<pair<string, string> > local_workload = workloads.top().second;
-        assert(local_workload.size() == sz);
-        workloads.pop();
-
-        DatasetAndWorkload local_dataset_and_workload(dataset_and_workload.get_dataset(), local_workload);
-
-        pair<double, string>* _ratio_and_best_split = ground_truth.analyze_negative_point_query_density_heatmap(local_dataset_and_workload);
-        if(_ratio_and_best_split == nullptr)
-        {
-            cout << "UNIFORM size = " << local_workload.size() << endl;
-            continue;
-        }
-
-        pair<double, string> ratio_and_best_split = *_ratio_and_best_split;
-
-//        float ratio = ratio_and_best_split.first;
-        string best_split = ratio_and_best_split.second;
-
-        cout << endl;
-
-        assert(local_workload.size() > 1);
-
-        vector<pair<string, string> > left_workload;
-        vector<pair<string, string> > right_workload;
-
-        for (size_t i = 0; i < local_workload.size(); i++) {
-            if (local_workload[i].second <= best_split) {
-                left_workload.push_back(local_workload[i]);
-            } else {
-                right_workload.push_back(local_workload[i]);
-            }
-        }
-
-        cout << left_workload.size() << endl;
-        cout << right_workload.size() << endl;
-
-        if(left_workload.size() >= 2) {
-            workloads.push(make_pair(left_workload.size(), left_workload));
-        }
-        if(right_workload.size() >= 2) {
-            workloads.push(make_pair(right_workload.size(), right_workload));
-        }
-    }
-}
+//
+//void eval_rf_heatmap(DatasetAndWorkload& dataset_and_workload)
+//{
+//    PointQuery *ground_truth_point_query = new GroundTruthPointQuery();
+//    RangeFilterTemplate ground_truth = RangeFilterTemplate(dataset_and_workload, ground_truth_point_query, false);
+//
+//    priority_queue<pair<size_t, vector<pair<string, string> > > > workloads;
+//
+//    vector<pair<string, string> > negative_workload = dataset_and_workload.get_negative_workload();
+//
+//    workloads.push(make_pair(negative_workload.size(), negative_workload));
+//
+//    while(!workloads.empty()) {
+//        size_t sz = workloads.top().first;
+//        assert(sz >= 2);
+//        cout << "SZ: " << sz << endl;
+//        vector<pair<string, string> > local_workload = workloads.top().second;
+//        assert(local_workload.size() == sz);
+//        workloads.pop();
+//
+//        DatasetAndWorkload local_dataset_and_workload(dataset_and_workload.get_dataset(), local_workload);
+//
+//        pair<double, string>* _ratio_and_best_split = ground_truth.analyze_negative_point_query_density_heatmap(local_dataset_and_workload);
+//        if(_ratio_and_best_split == nullptr)
+//        {
+//            cout << "UNIFORM size = " << local_workload.size() << endl;
+//            continue;
+//        }
+//
+//        pair<double, string> ratio_and_best_split = *_ratio_and_best_split;
+//
+////        float ratio = ratio_and_best_split.first;
+//        string best_split = ratio_and_best_split.second;
+//
+//        cout << endl;
+//
+//        assert(local_workload.size() > 1);
+//
+//        vector<pair<string, string> > left_workload;
+//        vector<pair<string, string> > right_workload;
+//
+//        for (size_t i = 0; i < local_workload.size(); i++) {
+//            if (local_workload[i].second <= best_split) {
+//                left_workload.push_back(local_workload[i]);
+//            } else {
+//                right_workload.push_back(local_workload[i]);
+//            }
+//        }
+//
+//        cout << left_workload.size() << endl;
+//        cout << right_workload.size() << endl;
+//
+//        if(left_workload.size() >= 2) {
+//            workloads.push(make_pair(left_workload.size(), left_workload));
+//        }
+//        if(right_workload.size() >= 2) {
+//            workloads.push(make_pair(right_workload.size(), right_workload));
+//        }
+//    }
+//}
 
 #include <chrono>
 
 void meta_dataset_construction()
 {
-    auto begin = std::chrono::high_resolution_clock::now();
     string file_folder;
-    string file_name = "1M_dataset.txt";
-    string workload_difficulty = "medium"; //choose from "easy", "medium", "hard", "impossible", hybrid
+    string file_name = "2k_dataset.txt";
+    string workload_difficulty = "impossible"; //choose from "easy", "medium", "hard", "impossible", "hybrid"
 
     string file_path = file_folder + file_name;
 
-    DatasetAndWorkload dataset_and_workload(file_path, workload_difficulty, true);
-    dataset_and_workload.get_negative_workload();
+//    Dataset dataset;
+//    DatasetAndWorkloadSeed _dataset_and_workload_seed(dataset, file_path, workload_difficulty);
 
-    GroundTruthPointQuery *original_ground_truth_point_query = new GroundTruthPointQuery();
-    RangeFilterTemplate original_ground_truth =
-            RangeFilterTemplate(dataset_and_workload, original_ground_truth_point_query, false);
+//    vector<DatasetAndWorkloadSeed> dataset_and_workload_seeds = _dataset_and_workload_seed.split_workload_seeds(1);
 
-    original_ground_truth.analyze_negative_point_query_density_heatmap(dataset_and_workload);
+    Dataset local_dataset;
+    DatasetAndWorkloadSeed dataset_and_workload_seed(local_dataset, file_path, workload_difficulty);
+    dataset_and_workload_seed.clear();
 
-    cout << original_ground_truth.get_negative_point_queries()/dataset_and_workload.get_negative_workload_assert_has().size() << endl;
+    int max_impossible_depth = local_dataset.get_max_length();
+    int min_impossible_depth = -1;
 
-    auto end = std::chrono::high_resolution_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin);
+    min_impossible_depth = 2;
+    max_impossible_depth = local_dataset.get_max_length();
 
-    printf("Time measured: %.3f seconds.\n", elapsed.count() * 1e-9);
+    ofstream out_data("training_data.out");
+
+    int dataset_id = 0;
+    cout << endl << endl;
+
+    for(int impossible_depth = min_impossible_depth; impossible_depth <= max_impossible_depth; impossible_depth++)
+    {
+        if(impossible_depth == 0) {
+            continue;
+        }
+
+        auto begin = std::chrono::high_resolution_clock::now();
+
+        cout << "impossible_depth: " << impossible_depth << endl;
+
+        DatasetAndWorkload _dataset_and_workload(file_path, workload_difficulty, impossible_depth, true);
+        vector<DatasetAndWorkload> dataset_and_workloads = _dataset_and_workload.split_workload(2);
+
+        int sum_negative_point_queries = 0;
+        int sum_negative_range_queries = 0;
+
+        for (size_t dataset_and_workload_id = 0; dataset_and_workload_id < dataset_and_workloads.size();dataset_and_workload_id++) {
+            DatasetAndWorkload& dataset_and_workload = dataset_and_workloads[dataset_and_workload_id];
+
+            dataset_and_workload.build_ground_truth_range_filter();
+
+            cout << endl;
+
+            string dataset_and_workload_string = "ID\t" + std::to_string(dataset_id) + "\tSTATS\t" + dataset_and_workload.stats_to_string();
+
+            auto& original_ground_truth = dataset_and_workload.get_ground_truth_range_filter();
+
+            sum_negative_range_queries += dataset_and_workload.get_negative_workload_assert_has().size();
+            sum_negative_point_queries += original_ground_truth.get_negative_point_queries();
+
+            if (false) {
+                cout << "stats:" << endl;
+                cout << "|dataset| = " << dataset_and_workload.get_dataset().size() << endl;
+                cout << "|workload| = " << dataset_and_workload.get_workload().size() << endl;
+                cout << "|negative_workload| = " << dataset_and_workload.get_negative_workload_assert_has().size()
+                     << endl;
+                cout << "|n.p.q.| = " << original_ground_truth.get_negative_point_queries() << endl;
+            }
+            cout << dataset_and_workload_string << endl;
+            cout << "n.p.q.d. = " << (float) original_ground_truth.get_negative_point_queries() /
+                                     dataset_and_workload.get_negative_workload_assert_has().size() << endl;
+
+//            PointQuery *ground_truth_point_query = new GroundTruthPointQuery();
+//            RangeFilterTemplate ground_truth = RangeFilterTemplate(dataset_and_workload, ground_truth_point_query,
+//                                                                   false);
+
+            string base_case_filter = "one_bloom" ; // choose from "surf;one_bloom", "surf", "multi_bloom", "one_bloom";
+
+            int base_case_size = dataset_and_workload.get_workload().size();
+
+            original_ground_truth.is_cold();
+
+            Frontier<HybridRangeFilterSynthesizer::PointQueryPointer> *ret =
+                    HybridRangeFilterSynthesizer::construct_hybrid_point_query(
+                            dataset_and_workload,
+                            original_ground_truth, base_case_filter,
+                            base_case_size,
+                            vector<string>(1, "root")).first;
+//
+//            ofstream dt_out("granular_one_bloom__splits2__on__imp_depth"+std::to_string(impossible_depth)+"__id"+std::to_string(dataset_and_workload_id+8)+".out");
+//
+//            ret->print(dt_out);
+//
+//            dt_out.close();
+
+            for(auto point : ret->get_frontier()) {
+                out_data << dataset_and_workload_string
+                << "\tPARAMS\t" << point->get_params().to_string()
+                << "\tSCORE\t" << point->score_to_string() << endl;
+            }
+
+            dataset_id++;
+
+            ret->clear();
+            dataset_and_workload.clear();
+
+        }
+
+        if (false) {
+            cout << "sum|negative_workload| = " << sum_negative_range_queries << endl;
+            cout << "sum|n.p.q| = " << sum_negative_point_queries << endl;
+        }
+        cout << "avg n.p.q.d = " << (float) sum_negative_point_queries / sum_negative_range_queries << endl;
+
+        _dataset_and_workload.clear();
+        dataset_and_workloads.clear();
+
+        auto end = std::chrono::high_resolution_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin);
+
+        printf("Time measured: %.3f seconds.\n", elapsed.count() * 1e-9);
+        cout << "-----------------------------------------------" << endl << endl;
+    }
+
+
 }
 
 int main() {
@@ -304,17 +403,17 @@ int main() {
 
     string file_path = file_folder + file_name;
 
-    bool do_extract_dataset = false;
+    bool do_extract_dataset = true;
     if (do_extract_dataset) {
-        extract_dataset(file_path, "6_dataset.txt", 6);
+        extract_dataset(file_path, "2k_dataset.txt", 2000);
         return 0;
     }
 
-    DatasetAndWorkload dataset_and_workload(file_path, workload_difficulty, true);
+    DatasetAndWorkload dataset_and_workload(file_path, workload_difficulty, -1, true);
 
     bool debug = false;
     if(debug) {
-        DatasetAndWorkload original_dataset_and_workload(file_path, workload_difficulty, false);
+        DatasetAndWorkload original_dataset_and_workload(file_path, workload_difficulty, -1, false);
 
         assert(dataset_and_workload.get_workload().size() == original_dataset_and_workload.get_workload().size());
         assert(dataset_and_workload.get_dataset().size() == original_dataset_and_workload.get_dataset().size());
@@ -332,13 +431,11 @@ int main() {
         for (int i = 0; i < workload_size; i++) {
             assert(!original_dataset_and_workload.get_workload()[i].first.empty() &&
                    !original_dataset_and_workload.get_workload()[i].second.empty());
-            bool original_rez = contains(
-                    original_dataset_and_workload.get_dataset(),
+            bool original_rez = original_dataset_and_workload.get_dataset().contains(
                     original_dataset_and_workload.get_workload()[i].first,
                     original_dataset_and_workload.get_workload()[i].second);
 
-            bool translated_rez = contains(
-                    dataset_and_workload.get_dataset(),
+            bool translated_rez = dataset_and_workload.get_dataset().contains(
                     dataset_and_workload.get_workload()[i].first,
                     dataset_and_workload.get_workload()[i].second);
 
@@ -416,12 +513,13 @@ int main() {
         return 0;
     }
 
-    if(range_filter_type == "heatmap")
-    {
-        assert(parameter_search_style == "no_search");
-        eval_rf_heatmap(dataset_and_workload);
-        return 0;
-    }
+    assert(range_filter_type != "heatmap");
+//    if(range_filter_type == "heatmap")
+//    {
+//        assert(parameter_search_style == "no_search");
+//        eval_rf_heatmap(dataset_and_workload);
+//        return 0;
+//    }
 //    string file_folder = "/home/kliment/Downloads/";
 //    string file_name = "emails-validated-random-only-30-characters.txt.sorted";
 
@@ -443,7 +541,7 @@ int main() {
 
 void grid_search(DatasetAndWorkload& dataset_and_workload, const string& _range_filter_type, ofstream& output_file){
 
-    const vector<string>& dataset = dataset_and_workload.get_dataset();
+    const Dataset& dataset = dataset_and_workload.get_dataset();
 
     string range_filter_type = _range_filter_type;
 
@@ -541,7 +639,7 @@ void grid_search(DatasetAndWorkload& dataset_and_workload, const string& _range_
                 PointQuery *pq;
                 bool do_print = false;
                 if (range_filter_type == "one_bloom") {
-                    pq = new OneBloom(dataset, seed_fprs[seed_fpr_id], cutoff, do_print);
+                    pq = new OneBloom(dataset, seed_fprs[seed_fpr_id], cutoff);
                 } else if (range_filter_type == "multi_bloom") {
                     pq = new MultiBloom(dataset, seed_fprs[seed_fpr_id], cutoff, do_print);
                 } else {

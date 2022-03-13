@@ -12,7 +12,8 @@ void RangeFilterTemplate::calc_metadata(const DatasetAndWorkload &dataset_and_wo
 
     max_char = dataset_and_workload.get_max_char();
     min_char = dataset_and_workload.get_min_char();
-    max_length = dataset_and_workload.get_max_length();
+    no_char = (char)((int)min_char-1);
+    max_length = dataset_and_workload.get_max_length()+1;//+1 for the is_leaf_char at the end.
 
     is_leaf_char = (char) ((int) max_char + 1);
     assert((int) is_leaf_char <= 127);
@@ -52,25 +53,14 @@ public:
 };
 
 pair<double, string> *
-RangeFilterTemplate::analyze_negative_point_query_density_heatmap(const DatasetAndWorkload &dataset_and_workload) {
-    assert(!track_negative_point_queries);
-
-    const vector<string>& dataset = dataset_and_workload.get_dataset();
-    const vector<pair<string, string> >& negative_workload = dataset_and_workload.get_negative_workload_assert_has();
-
-//    assert(negative_workload == dataset_and_workload.get_negative_workload_assert_has());
-
-    track_negative_point_queries = true;
-
-    for(size_t i = 0;i<negative_workload.size();i++) {
-        auto it = negative_workload[i];
-        assert(query(it.first, it.second) == false);
-    }
-
+RangeFilterTemplate::analyze_negative_point_query_density_heatmap(const DatasetAndWorkload &dataset_and_workload, bool do_print) const {
+    build_heatmap(dataset_and_workload);
     assert(track_negative_point_queries);
 
-    vector<pair<string, string> > inits;
-    vector<pair<string, string> > ends;
+    const Dataset& dataset = dataset_and_workload.get_dataset();
+    const Workload& negative_workload = dataset_and_workload.get_negative_workload_assert_has();
+
+    Workload inits;
 
     for(size_t i = 0;i<negative_workload.size();i++)
     {
@@ -93,11 +83,13 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(const DatasetA
     size_t at_init = 0;
     vector<pair<float, float> > densities;
 
-    ofstream out("densities.out");
+    ofstream out;
+    if(do_print)
+    {
+        out = ofstream("densities.out");
+    }
 
     pair<float, string> best_split = make_pair(-1, "");
-
-//        for(size_t at_arr = 0; at_arr < arr.size(); at_arr++)
 
     size_t at_arr = 0;
 
@@ -188,10 +180,14 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(const DatasetA
         float right_density = (float)(sum-prefix_sum)/(inits.size()-at_init);
 
         densities.emplace_back(left_density,right_density);
-//            cout <<at_init <<" "<< left_density <<" "<< right_density << endl;
 
         float score = max(right_density/left_density, left_density/right_density);
-        out << row_id << " "<< score <<  " left_density = "  << prefix_sum <<" / "<< at_init << " = " << left_density << " | right_density = " << (sum-prefix_sum) << "/" <<(inits.size() - at_init) << " = " << right_density <<" | ratios: " << left_density/right_density <<" "<< right_density/left_density << endl;
+        if(do_print) {
+            out << row_id << " " << score << " left_density = " << prefix_sum << " / " << at_init << " = "
+                << left_density << " | right_density = " << (sum - prefix_sum) << "/" << (inits.size() - at_init)
+                << " = " << right_density << " | ratios: " << left_density / right_density << " "
+                << right_density / left_density << endl;
+        }
 
         best_split = max(best_split, make_pair(score, dataset[row_id]));
 
@@ -213,11 +209,15 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(const DatasetA
         split_size_vs_density_ratio_frontier.insert(MyString(dataset[row_id]), multi_d_score);
 //        assert(split_size_vs_density_ratio_frontier.is_sorted());
     }
-    out.close();
+    if(do_print) {
+        out.close();
+    }
 
-    cout << "best based on density ratio: " << best_split.first <<" "<< best_split.second << endl;
+    if(do_print) {
+        cout << "best based on density ratio: " << best_split.first << " " << best_split.second << endl;
+        split_size_vs_density_ratio_frontier.print(cout, 10, true);
+    }
 
-    split_size_vs_density_ratio_frontier.print(cout, 10, true);
 //    assert(split_size_vs_density_ratio_frontier.is_sorted());
 
     int constraint_relaxation_id = 1;
@@ -241,16 +241,14 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(const DatasetA
         if (almost_ret != nullptr) {
             ret = new pair<double, string>(-almost_ret->first[0], almost_ret->second);
         }
-        cout << "constrain_relaxation_id " << constraint_relaxation_id << endl;
-
-        if(ret != nullptr) {
-            cout << "ret: " << ret->first << " " << ret->second << " size_ratio: " << almost_ret->first[1] << endl;
+        if(do_print) {
+            cout << "constrain_relaxation_id " << constraint_relaxation_id << endl;
+            if (ret != nullptr) {
+                cout << "ret: " << ret->first << " " << ret->second << " size_ratio: " << almost_ret->first[1] << endl;
+            } else {
+                cout << "ret = nullptr" << endl;
+            }
         }
-        else
-        {
-            cout << "ret = nullptr" << endl;
-        }
-
         constraint_relaxation_id ++;
     }
 
@@ -259,6 +257,59 @@ RangeFilterTemplate::analyze_negative_point_query_density_heatmap(const DatasetA
     return ret;
 }
 
+void RangeFilterTemplate::build_heatmap(const DatasetAndWorkload &dataset_and_workload) const {
+    assert(!track_negative_point_queries);
+    assert(num_negative_point_queries == 0);
+    assert(prefix_to_negative_point_queries.empty());
+//    assert(negative_point_queries.empty());
+
+    const Workload& negative_workload = dataset_and_workload.get_negative_workload_assert_has();
+
+    track_negative_point_queries = true;
+
+    for(size_t i = 0;i<negative_workload.size();i++) {
+        auto it = negative_workload[i];
+        assert(query(it.first, it.second) == false);
+    }
+
+    assert(track_negative_point_queries);
+}
+
+
 void RangeFilterTemplate::set_point_query(PointQuery *new_pq) {
     pq = new_pq;
+}
+
+size_t RangeFilterTemplate::get_cutoff() {
+    assert(!is_cold());
+    assert(track_negative_point_queries);
+    assert(num_negative_point_queries >= 1);
+    assert(!prefix_to_negative_point_queries.empty());
+    //assert(!negative_point_queries.empty());
+
+    size_t ret = 0;
+
+    for(const auto& it: prefix_to_negative_point_queries) {
+        ret = max(ret, it.first.size());
+    }
+
+    return ret;
+}
+
+size_t RangeFilterTemplate::get_unique_negative_point_queries() {
+    assert(track_negative_point_queries);
+    assert(num_negative_point_queries >= 1);
+    assert(!prefix_to_negative_point_queries.empty());
+    //assert(!negative_point_queries.empty());
+
+    return prefix_to_negative_point_queries.size();
+}
+
+bool RangeFilterTemplate::is_cold() const {
+    if(!track_negative_point_queries) {
+        assert(num_negative_point_queries == 0);
+        assert(prefix_to_negative_point_queries.empty());
+//        assert(negative_point_queries.empty());
+    }
+    return !track_negative_point_queries;
 }

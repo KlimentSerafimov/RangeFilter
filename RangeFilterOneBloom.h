@@ -11,21 +11,30 @@
 #include <string>
 #include <cstring>
 #include <iostream>
+#include <sstream>
 #include "PointQuery.h"
-#include "RangeFilterTemplate.h"
+#include "iomanip"
 
 using namespace std;
+
+class Dataset;
 
 class OneBloomParams: public virtual PointQueryParams
 {
 protected:
-    double seed_fpr;
-    int cutoff;
+    const int cutoff;
+    const int num_inserts;
+    const double seed_fpr;
 public:
-    OneBloomParams(double _seed_fpr, int _cutoff):  seed_fpr(_seed_fpr), cutoff(_cutoff) {}
+    OneBloomParams(const int _num_inserts, const double _seed_fpr, const int _cutoff):
+        cutoff(_cutoff), num_inserts(_num_inserts), seed_fpr(_seed_fpr) {}
     string to_string() const override
     {
-        return "seed_fpr\t" + std::to_string(seed_fpr) + "\tcutoff\t" + std::to_string(cutoff);
+        std::ostringstream streamObj;
+        streamObj << fixed << setprecision(9) << "cutoff " << cutoff<< " num_inserts " << num_inserts << " seed_fpr " << seed_fpr;
+        std::string ret = streamObj.str();
+        return ret;
+//        return "cutoff " + std::to_string(cutoff) + " num_inserts " + std::to_string(num_inserts) + " seed_fpr " + std::to_string(seed_fpr);
     }
     void _clear() override {
         set_cleared_to(true);
@@ -37,43 +46,9 @@ class OneBloom: public OneBloomParams, public PointQuery
     bloom_filter bf;
     bool bf_defined = false;
 
-    long long total_num_chars{};
-
-    void calc_metadata(const vector<string>& dataset, bool do_print)
-    {
-        total_num_chars = 0;
-
-        int char_count[127];
-        memset(char_count, 0, sizeof(char_count));
-
-        for(int i = 0;i<(int)dataset.size();i++)
-        {
-            if(cutoff != -1) {
-                total_num_chars += min((int) dataset[i].size() + 1, cutoff);
-            }
-            else
-            {
-                total_num_chars += (int)dataset.size()+1;
-            }
-        }
-
-        if(do_print) {
-            cout << "ONE_BOOM STATS" << endl;
-            cout << "num_chars " << total_num_chars << endl;
-        }
-    }
-
 public:
 
-    OneBloom(const vector<string>& dataset, double _seed_fpr, int _cutoff, bool do_print = false):
-            OneBloomParams(_seed_fpr, _cutoff){
-        calc_metadata(dataset, do_print);
-        if(total_num_chars > 0) {
-            bloom_parameters params = get_bloom_parameters(total_num_chars, seed_fpr);
-            bf = bloom_filter(params);
-            bf_defined = true;
-        }
-    }
+    OneBloom(const Dataset &dataset, double _seed_fpr, int _cutoff);
 
     string to_string() const override
     {
@@ -82,8 +57,7 @@ public:
 
     void insert(const string& s) override
     {
-        if(cutoff != -1 && (int)s.size() > cutoff)
-        {
+        if(cutoff != -1 && (int)s.size() > cutoff) {
             //assume inserted
         }
         else {
@@ -95,8 +69,7 @@ public:
     bool contains(const string& s) override
     {
         bool ret = true;
-        if(cutoff != -1 && (int)s.size() > cutoff)
-        {
+        if(cutoff != -1 && (int)s.size() > cutoff) {
             ret = true;
         }
         else {

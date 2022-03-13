@@ -18,6 +18,7 @@
 using namespace std;
 
 class RangeFilterTemplate;
+class MemorizedPointQuery;
 
 vector<string> read_dataset(const string& file_path);
 
@@ -29,10 +30,13 @@ private:
     static int reads_from_cache;
     static int total_reads;
     static int cache_read_attempts;
+
+    const MemorizedPointQuery *ground_truth_point_query = nullptr;
+
 public:
 
-    Dataset() {}
-    Dataset(const vector<string>& _dataset): vector<string>(_dataset) {}
+    Dataset() = default;
+    explicit Dataset(const vector<string>& _dataset): vector<string>(_dataset) {}
 
     inline bool cached_contains(
             const vector<string>& dataset,
@@ -41,10 +45,6 @@ public:
             vector<string>::const_iterator& lb,
             vector<string>::const_iterator& hb,
             vector<string>::const_iterator& at) const {
-//        if(total_reads == 5310024)
-//        {
-//            cout << "here" << endl;
-//        }
         if(prev_dataset != nullptr) {
             cache_read_attempts ++;
             at = prev_iter;
@@ -84,7 +84,6 @@ public:
                             } else {
                                 assert(at == dataset.begin());
                                 has_ret = true;
-                                assert(false);
                                 return false;
                             }
                         }
@@ -122,8 +121,8 @@ public:
         vector<string>::const_iterator at;
 
         bool has_ret = false;
-//        bool ret = cached_contains(dataset, left, right, has_ret, lb, hb, at);
-        bool ret = true;
+        bool ret = cached_contains(dataset, left, right, has_ret, lb, hb, at);
+//        bool ret = true;
 
         total_reads+=1;
 
@@ -134,17 +133,6 @@ public:
             prev_iter = at;
 
             return ret;
-        }
-
-        if(false){
-//        if (reads_from_cache % 500 == 0)
-            cout << reads_from_cache << "/" << cache_read_attempts << "/" << total_reads << " "
-                 << (float) 100 * reads_from_cache / cache_read_attempts << " "
-                 << (float) 100 * cache_read_attempts / total_reads << endl;
-            if (reads_from_cache == 18500 || reads_from_cache == 19000 || reads_from_cache == 19500 ||
-                reads_from_cache == 21000 || reads_from_cache == 21500) {
-                cout << "here" << endl;
-            }
         }
 
         auto new_at = lower_bound(lb, hb, left);
@@ -192,6 +180,12 @@ public:
     }
 
     void remove_duplicates();
+
+    int get_num_inserts_in_point_query(size_type cutoff) const;
+
+    void set_ground_truth_point_query(const MemorizedPointQuery *_ground_truth_point_query);
+
+    size_t get_max_length();
 };
 
 class DatasetAndWorkloadMetaData
@@ -223,8 +217,6 @@ protected:
         for(auto c: str)
         {
             assert(!char_to_binary_string[(size_t)(unsigned char)c].empty());
-//            assert(to_binary_string(char_to_id[c], num_bits_per_char) == char_to_binary_string[(int)c]);
-//            new_str += to_binary_string(char_to_id[c], num_bits_per_char);
             new_str+=char_to_binary_string[(size_t)(unsigned char)c];
         }
         return new_str;
@@ -232,39 +224,48 @@ protected:
 
 
     string char_to_binary_string[CHAR_SIZE];
+    char char_to_new_char[CHAR_SIZE];
 
     size_t max_length = 0;
+    size_t max_length_of_key = 0;
     char min_char = (char)127;
     char max_char = (char)0;
 
     int max_id = -1;
     int count_num_char[CHAR_SIZE];
+
     map<char, size_t> char_to_id;
     vector<char> id_to_char;
     int num_bits = -1;
     size_t _base = 2;
     const size_t final_base = 64;
     int num_bits_per_char = -1;
+
 public:
     const DatasetAndWorkloadMetaData& original_meta_data;
+    const string _workload_difficulty;
+    const int _impossible_depth;
 
-    DatasetAndWorkloadMetaData(): original_meta_data(*this) {
-        memset(count_num_char, 0, sizeof(count_num_char));
-    }
+//    DatasetAndWorkloadMetaData(): original_meta_data(*this) {
+//        memset(count_num_char, 0, sizeof(count_num_char));
+//    }
 
-    DatasetAndWorkloadMetaData(const DatasetAndWorkloadMetaData& is_original, bool assert_true): original_meta_data(is_original) {
+    DatasetAndWorkloadMetaData(const string& __workload_difficulty, const int __impossible_depth): original_meta_data(*this),
+            _workload_difficulty(__workload_difficulty),
+            _impossible_depth(__impossible_depth){}
+
+    DatasetAndWorkloadMetaData(const DatasetAndWorkloadMetaData& is_original, bool assert_true): original_meta_data(is_original),
+        _workload_difficulty(is_original._workload_difficulty),
+        _impossible_depth(is_original._impossible_depth) {
         assert(assert_true);
         max_length = is_original.max_length;
+        max_length_of_key = is_original.max_length_of_key;
         min_char = is_original.min_char;
         max_char = is_original.max_char;
-        memset(count_num_char, 0, sizeof(count_num_char));
-        for(int i = 0;i<CHAR_SIZE;i++) {
-            char_to_binary_string[i] = is_original.char_to_binary_string[i];
-            count_num_char[i] = is_original.count_num_char[i];
-        }
+        memcpy(count_num_char, is_original.count_num_char, sizeof(count_num_char));
     }
 
-    string to_string_base(const string& str) const
+    string binary_string_to_string_in_base(const string& str) const
     {
         assert(num_bits != -1);
         string new_str;
@@ -306,6 +307,17 @@ public:
         return new_str;
     }
 
+    string original_string_to_string_in_base(const string& str) const
+    {
+        string ret;
+        for(size_t i = 0;i<str.size();i++) {
+//            assert(char_to_id.find(str[i]) != char_to_id.end());
+//            ret += (char)char_to_id.at(str[i]);
+            ret += char_to_new_char[(int)str[i]];
+        }
+        return ret;
+    }
+
     void process_str(const string& str)
     {
         assert(!str.empty());
@@ -314,7 +326,7 @@ public:
             char c = str[i];
             min_char = min(min_char, c);
             max_char = max(max_char, c);
-            count_num_char[(int)c]+=1;
+            count_num_char[(size_t)(unsigned char)c]+=1;
         }
     }
 
@@ -354,14 +366,51 @@ public:
 
 };
 
+class DatasetAndWorkloadSeed
+{
+    Dataset& dataset;
+    Dataset workload_seed;
+    char init_char = (char)127;
+
+public:
+
+    void prep_dataset_and_workload_seed(const string& file_path, const string& workload_difficulty, int impossible_depth = -1);
+
+    DatasetAndWorkloadSeed(Dataset& _dataset, const string& file_path, const string& workload_difficulty): dataset(_dataset) {
+        prep_dataset_and_workload_seed(file_path, workload_difficulty);
+    }
+
+    DatasetAndWorkloadSeed(Dataset& _dataset, const Dataset& _workload_seed): dataset(_dataset), workload_seed(_workload_seed)
+    { }
+
+
+    const Dataset &get_workload_seed() const {
+        return workload_seed;
+    }
+
+    char get_init_char() const {
+        return init_char;
+    }
+
+    const Dataset &get_dataset() const ;
+
+    vector<DatasetAndWorkloadSeed> split_workload_seeds(int num_splits);
+
+    void clear();
+};
+
+typedef vector<pair<string, string> > Workload;
+
 class DatasetAndWorkload: public DatasetAndWorkloadMetaData
 {
     Dataset dataset;
-    vector<pair<string, string> > workload;
+    Workload workload;
+
+    RangeFilterTemplate* ground_truth_range_filter = nullptr;
 
     bool negative_workload_defined = false;
-    vector<pair<string, string> > negative_workload;
-    void translate_to_base()
+    Workload negative_workload;
+    void translate_binary_to_to_base()
     {
         assert(_base <= 128);
 
@@ -378,17 +427,60 @@ class DatasetAndWorkload: public DatasetAndWorkloadMetaData
 
         for(size_t i = 0;i<dataset.size();i++)
         {
-            dataset[i] = to_string_base(dataset[i]);
+            dataset[i] = binary_string_to_string_in_base(dataset[i]);
         }
 
         for(size_t i = 0;i<workload.size();i++)
         {
             workload[i] = make_pair(
-                    to_string_base(workload[i].first),
-                    to_string_base(workload[i].second));
+                    binary_string_to_string_in_base(workload[i].first),
+                    binary_string_to_string_in_base(workload[i].second));
         }
     }
 
+    void translate_to_base() {
+        assert(id_to_char.empty());
+        assert(char_to_id.empty());
+
+        id_to_char.push_back(0);
+
+        set<char> unique_chars = get_unique_chars();
+
+        size_t id = 1;
+        size_t prev = 0;
+        for (auto c: unique_chars) {
+            assert(c != 0);
+            assert(prev <= char_to_id[c]);
+            prev = char_to_id[c];
+            assert(id_to_char.size() == id);
+            id_to_char.push_back(c);
+            char_to_id[c] = id++;
+        }
+        num_bits_per_char = 1;
+        max_id = id - 1;
+        int at = 1;
+        while (at <= max_id) {
+            at *= _base;
+            num_bits_per_char++;
+        }
+        num_bits_per_char--;
+
+//        cout << "max_id " << max_id << " " << num_bits_per_char << endl;
+
+        for (auto c: unique_chars) {
+            char_to_new_char[(int) c] = (char) char_to_id[c];
+        }
+
+        for (size_t i = 0; i < dataset.size(); i++) {
+            dataset[i] = original_string_to_string_in_base(dataset[i]);
+        }
+
+        for (size_t i = 0; i < workload.size(); i++) {
+            workload[i] = make_pair(
+                    original_string_to_string_in_base(workload[i].first),
+                    original_string_to_string_in_base(workload[i].second));
+        }
+    }
 
     set<char> get_unique_chars() {
         set<char> ret;
@@ -450,11 +542,30 @@ class DatasetAndWorkload: public DatasetAndWorkloadMetaData
                     to_binary_string(workload[i].first),
                     to_binary_string(workload[i].second));
         }
-
     }
 
+    void process()
+    {
+        max_length = 0;
+        min_char = (char) 127;
+        max_char = (char) 0;
+        memset(count_num_char, 0, sizeof(count_num_char));
+        negative_workload_defined = false;
+        negative_workload.clear();
 
+        for(const auto& it: dataset) {
+            process_str(it);
+            max_length_of_key = max(max_length_of_key, it.size());
+        }
+        for(const auto& it: workload) {
+            process_str(it.first);
+            process_str(it.second);
+        }
+
+    }
 public:
+
+    void clear();
 
     void print(ostream& out) const
     {
@@ -469,86 +580,86 @@ public:
         }
     }
 
-    DatasetAndWorkload(const string& file_path, const string& workload_difficulty, bool do_translate_to_base) {
+//    DatasetAndWorkload(const DatasetAndWorkloadSeed& dataset_and_workload_seed, const string& workload_difficulty, bool do_translate_to_base)
+//    {
+//        dataset = dataset_and_workload_seed.get_dataset();
+//
+//        prep_dataset_and_workload(dataset_and_workload_seed, workload_difficulty);
+//
+//        process();
+//
+//        if(do_translate_to_base) {
+//            translate_to_base();
+//            process();
+//        }
+//    }
 
-        prep_dataset_and_workload(file_path, workload_difficulty);
+    DatasetAndWorkload(const string& file_path, const string& __workload_difficulty, const int __impossible_depth, bool do_translate_to_base):
+            DatasetAndWorkloadMetaData(__workload_difficulty, __impossible_depth){
 
-        for(const auto& it: dataset) {
-            process_str(it);
-        }
-        for(const auto& it: workload) {
-            process_str(it.first);
-            process_str(it.second);
-        }
+        DatasetAndWorkloadSeed dataset_and_workload_seed = DatasetAndWorkloadSeed(dataset, file_path, _workload_difficulty);
+
+        prep_dataset_and_workload(dataset_and_workload_seed, _workload_difficulty, _impossible_depth);
+
+        process();
 
         if(do_translate_to_base) {
 
-//            size_t num_negative_workload = get_negative_workload().size();
+            translate_to_base();
+            process();
 
+            if(false) {
+//                DatasetAndWorkload to_compare(dataset_and_workload_seed, workload_difficulty, true);
+
+//            size_t num_negative_workload = get_negative_workload().size();
 //            DatasetAndWorkload original = DatasetAndWorkload(dataset, workload);
 
-            translate_to_binary();
+                translate_to_binary();
 
-            max_length = 0;
-            min_char = (char) 127;
-            max_char = (char) 0;
-            memset(count_num_char, 0, sizeof(count_num_char));
-            negative_workload_defined = false;
-            negative_workload.clear();
-
-            for (const auto &it: dataset) {
-                process_str(it);
-            }
-            for (const auto &it: workload) {
-                process_str(it.first);
-                process_str(it.second);
-            }
+                process();
 
 //            get_negative_workload(&original);
-//
 //            assert(num_negative_workload == negative_workload.size());
 
-            assert(get_unique_chars().size() == _base);
+                assert(get_unique_chars().size() == _base);
 
-            _base = final_base;
+                _base = final_base;
 
-            translate_to_base();
+                translate_binary_to_to_base();
 
-            max_length = 0;
-            min_char = (char) 127;
-            max_char = (char) 0;
-            memset(count_num_char, 0, sizeof(count_num_char));
-            negative_workload_defined = false;
-            negative_workload.clear();
-
-            for (const auto &it: dataset) {
-                process_str(it);
-            }
-            for (const auto &it: workload) {
-                process_str(it.first);
-                process_str(it.second);
-            }
+                process();
 
 //            get_negative_workload(&original);
-//
 //            assert(num_negative_workload == negative_workload.size());
+
+//                assert(to_compare == *this);
+            }
         }
+
+
     }
 
-    DatasetAndWorkload(const vector<string>& _dataset, const vector<pair<string, string> >& _workload):
-        dataset(_dataset), workload(_workload){
-
-        for(const auto& it: dataset) {
-            process_str(it);
-        }
-        for(const auto& it: workload) {
-            process_str(it.first);
-            process_str(it.second);
-        }
-        assert(get_unique_chars().size() <= final_base);
+    bool operator == (const DatasetAndWorkload& other) const
+    {
+        assert(dataset == other.dataset);
+        assert(workload == other.workload);
+        return dataset == other.dataset && workload == other.workload;
     }
 
-    DatasetAndWorkload(const vector<string>& _dataset, const vector<pair<string, string> >& _workload, const DatasetAndWorkloadMetaData& to_copy_meta_data):
+//    DatasetAndWorkload(const vector<string>& _dataset, const Workload& _workload):
+//        dataset(_dataset), workload(_workload){
+//
+//        for(const auto& it: dataset) {
+//            process_str(it);
+//        }
+//        for(const auto& it: workload) {
+//            process_str(it.first);
+//            process_str(it.second);
+//        }
+//        assert(get_unique_chars().size() <= final_base);
+//    }
+
+    DatasetAndWorkload(const vector<string>& _dataset, const Workload& _workload, const DatasetAndWorkloadMetaData& to_copy_meta_data):
             DatasetAndWorkloadMetaData(to_copy_meta_data.original_meta_data, true), dataset(_dataset), workload(_workload){
 
         assert(get_unique_chars().size() <= final_base);
@@ -564,24 +675,22 @@ public:
         return max_length;
     }
 
-    const vector<string>& get_dataset() const
+    const Dataset& get_dataset() const
     {
         return dataset;
     }
-    const vector<pair<string, string> >& get_workload() const
+    const Workload& get_workload() const
     {
         return workload;
     }
-
-
 
     const RangeFilterScore * test_range_filter(RangeFilterTemplate* rf, bool do_print = false) const;
 
     const RangeFilterScore * eval_point_query(PointQuery* pq) const;
 
-    void prep_dataset_and_workload(const string& file_path, const string& workload_difficulty, int impossible_depth = -1);
+    void prep_dataset_and_workload(const DatasetAndWorkloadSeed& dataset_and_workload_seed, const string& workload_difficulty, const int impossible_depth = -1);
 
-    const vector<pair<string, string> >& get_negative_workload(DatasetAndWorkload* prev= nullptr)
+    const Workload& get_negative_workload(DatasetAndWorkload* prev= nullptr)
     {
         if(!negative_workload_defined) {
             for (size_t i = 0; i < workload.size(); i++) {
@@ -605,7 +714,15 @@ public:
 
     int get_max_length_of_dataset() const;
 
-    const vector<pair<string, string> > &get_negative_workload_assert_has() const;
+    const Workload &get_negative_workload_assert_has() const;
+
+    vector<DatasetAndWorkload> split_workload(int i);
+
+    string stats_to_string();
+
+    void build_ground_truth_range_filter();
+
+    const RangeFilterTemplate &get_ground_truth_range_filter();
 };
 
 #endif //SURF_DATASETANDWORKLOAD_H

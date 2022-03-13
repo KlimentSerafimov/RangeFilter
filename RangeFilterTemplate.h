@@ -60,9 +60,19 @@ class MemorizedPointQuery: public PointQuery
     bool is_sorted = true;
     vector<Dataset> datasets;
     bool should_be_sorted = false;
+    size_t local_cutoff = 0;
 public:
     
     MemorizedPointQuery() { }
+
+    int get_num_prefixes(size_t cutoff) const {
+        assert(cutoff == local_cutoff);
+        int ret = 0;
+        for(size_t i = 0; i<cutoff;i++) {
+            ret+=datasets[i].size();
+        }
+        return ret;
+    }
 
     bool contains(const string& s) override {
         assert(!s.empty());
@@ -75,6 +85,7 @@ public:
             is_sorted = true;
             should_be_sorted = true;
         }
+        local_cutoff = max(local_cutoff, s.size());
         size_t dataset_id = s.size()-1;
         assert(dataset_id < datasets.size());
         Dataset& dataset = datasets[dataset_id];
@@ -125,7 +136,6 @@ public:
     }
 
     void _clear() override {
-        assert(false);
         for(auto dataset:datasets) {
             dataset.clear();
         }
@@ -140,32 +150,33 @@ class RangeFilterTemplate
     PointQuery* pq;
     char max_char{};
     char min_char{};
+    char no_char{};
     char is_leaf_char{};
     size_t max_length{};
 
-    int num_negative_point_queries = 0;
+    mutable int num_negative_point_queries = 0;
 
-    bool has_prev_num_negative_point_queries = false;
-    int prev_num_negative_point_queries = 0;
+    mutable bool has_prev_num_negative_point_queries = false;
+    mutable int prev_num_negative_point_queries = 0;
 
     void calc_metadata(const DatasetAndWorkload& dataset_and_workload, bool do_print);
 
-public:
-    ~RangeFilterTemplate(){ }
 private:
-    bool track_negative_point_queries = false;
-    map<string, int> prefix_to_negative_point_queries;
+    mutable bool track_negative_point_queries = false;
+    mutable map<string, int> prefix_to_negative_point_queries;
+//    mutable map<string, int> negative_point_queries;
 
-    void reset()
+    void reset() const
     {
         track_negative_point_queries = false;
         prefix_to_negative_point_queries.clear();
+//        negative_point_queries.clear();
         has_prev_num_negative_point_queries = true;
         prev_num_negative_point_queries = num_negative_point_queries;
         num_negative_point_queries = 0;
     }
 
-    bool contains(const string& s, const string& left_str, const string& right_str)
+    bool contains(const string& s, const string& left_str, const string& right_str) const
     {
         if(s.empty())
         {
@@ -179,10 +190,19 @@ private:
 
                 const string& record_s = s;
 
+                //---
                 if (prefix_to_negative_point_queries.find(record_s) == prefix_to_negative_point_queries.end()) {
                     prefix_to_negative_point_queries[record_s] = 0;
                 }
                 prefix_to_negative_point_queries[record_s] += 1;
+
+                //---
+//                if (negative_point_queries.find(s) == negative_point_queries.end()) {
+//                    negative_point_queries[s] = 0;
+//                }
+//                negative_point_queries[s] += 1;
+
+                //---
                 num_negative_point_queries += 1;
             }
         }
@@ -212,7 +232,7 @@ private:
         return s;
     }
 
-    void breakpoint(bool ret)
+    void breakpoint(bool ret) const
     {
         if(do_breakpoint && ret)
         cout << "ret" << endl;
@@ -236,11 +256,14 @@ public:
 
     RangeFilterTemplate(const DatasetAndWorkload& dataset_and_workload, PointQuery* _pq, bool do_print = false);
 
-    bool query(string left, string right)
+    bool query(const string& _left, const string& _right) const
     {
+        string left = _left;
+        string right = _right;
         assert(!left.empty() && !right.empty());
         assert(str_invariant(left));
         assert(str_invariant(right));
+        assert(left <= right);
 
         if(pq->get_has_range_query()) {
             return pq->range_query(left, right);
@@ -249,9 +272,10 @@ public:
         size_t max_n = max(max_length, max(left.size(), right.size()));
 
         if(left.size()<max_n) {
-            assert(left.size() >= 1);
+            assert(!left.empty());
             size_t at = left.size()-1;
             if(left[at] == 0) {
+                assert(false);
                 left.pop_back();
             }
             else {
@@ -260,7 +284,8 @@ public:
         }
 
         left = pad(left, max_n, max_char);
-        right = pad(right, max_n, min_char);
+        assert(no_char == (char)((int)min_char-1) && no_char >= 0);
+        right = pad(right, max_n, no_char);
 
         assert(left.size() == right.size());
         assert(left.size() == max_n);
@@ -335,10 +360,24 @@ public:
                             return true;
                         }
                     }
+
                     //check boundary character
                     //aaabb
+
                     left_prefix += left[left_id];
-                    if (contains(left_prefix, left, right)) {
+                    bool out_of_scope = false;
+                    if(left_prefix.size() == _left.size()) {
+                        out_of_scope = true;
+                        assert(left_prefix < _left && _left.substr(0, left_prefix.size()) != left_prefix);
+                    }
+                    else {
+                        assert(!(left_prefix < _left && _left.substr(0, left_prefix.size()) != left_prefix));
+                    }
+                    if(left_prefix < _left && _left.substr(0, left_prefix.size()) != left_prefix) {
+                        assert(out_of_scope);
+                    }
+
+                    if (!out_of_scope && contains(left_prefix, left, right)) {
                         continue_left = true;
                         //continue checking
                     } else {
@@ -394,12 +433,26 @@ public:
                     }
                     else {
                         assert(right[right_id] == 0);
-                        assert(right[right_id] == min_char);
+                        assert(right[right_id] == no_char);
                     }
                     //check boundary character
                     //aaabb
                     right_prefix += right[right_id];
-                    if (contains(right_prefix, left, right)) {
+
+                    bool out_of_scope = false;
+                    if(right_prefix.size() == _right.size()+1) {
+                        out_of_scope = true;
+                        assert(right_prefix > _right && _right.substr(0, right_prefix.size()) != right_prefix);
+                    }
+                    else {
+                        assert(!(right_prefix > _right && _right.substr(0, right_prefix.size()) != right_prefix));
+                    }
+
+                    if(right_prefix > _right && _right.substr(0, right_prefix.size()) != right_prefix) {
+                        assert(out_of_scope);
+                    }
+
+                    if (!out_of_scope && contains(right_prefix, left, right)) {
                         continue_right = true;
                         if(contains(right_prefix+is_leaf_char, left, right))
                         {
@@ -441,7 +494,7 @@ public:
         return is_leaf_char;
     }
 
-    int get_negative_point_queries() {
+    int get_negative_point_queries() const {
         if(track_negative_point_queries) {
             return num_negative_point_queries;
         }
@@ -451,9 +504,17 @@ public:
         }
     }
 
-    pair<double, string>* analyze_negative_point_query_density_heatmap(const DatasetAndWorkload& dataset_and_workload);
+    pair<double, string>* analyze_negative_point_query_density_heatmap(const DatasetAndWorkload& dataset_and_workload, bool do_print = false) const;
+
+    void build_heatmap(const DatasetAndWorkload& dataset_and_workload) const;
 
     void set_point_query(PointQuery *new_pq);
+
+    size_t get_cutoff();
+
+    size_t get_unique_negative_point_queries();
+
+    bool is_cold() const;
 };
 
 
